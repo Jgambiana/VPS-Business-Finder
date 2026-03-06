@@ -6,7 +6,7 @@ const cors = require("cors");
 const cheerio = require("cheerio");
 
 const app = express();
-
+const HUNTER_API_KEY = process.env.HUNTER_API_KEY;
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
@@ -400,4 +400,5 @@ app.post("/api/search.csv", async (req, res) => {
 
 
 app.listen(3000, () => console.log("Server running on http://127.0.0.1:3000"));
+
 
