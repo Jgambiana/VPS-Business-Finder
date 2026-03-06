@@ -121,14 +121,13 @@
 
 <div id="results"></div>
 
-<!-- HubSpot Meeting Modal -->
 <div id="meetingModal" class="modal-overlay">
   <div class="modal-box">
     <button id="closeMeetingModal" class="modal-close">&times;</button>
     <h3>Book Meeting</h3>
     <div
       class="meetings-iframe-container"
-      data-src="https://meetings-na2.hubspot.com/joel-gambiana?embed=true">
+      data-src="https://meetings.hubspot.com/YOUR_HUBSPOT_MEETINGS_LINK?embed=true">
     </div>
   </div>
 </div>
@@ -190,12 +189,13 @@
         infoWindow.setContent(`
           <div style="font-family:Arial;font-size:14px;max-width:260px;">
             <div style="font-weight:bold;margin-bottom:4px;">${escapeHtml(r.name || "")}</div>
+            <div>${escapeHtml(r.contactName || "")} ${r.contactTitle ? `- ${escapeHtml(r.contactTitle)}` : ""}</div>
             <div>${escapeHtml(r.address || "")}</div>
             <div>${escapeHtml(r.phone || "")}</div>
+            <div>Email: ${escapeHtml(r.hunterEmail || r.email || "")}</div>
             <div>Rating: ${escapeHtml(String(r.rating || ""))} ${r.reviewCount ? `(${escapeHtml(String(r.reviewCount))})` : ""}</div>
             ${r.website ? `<div><a href="${r.website}" target="_blank">Website</a></div>` : ""}
             ${r.googleMapsUrl ? `<div><a href="${r.googleMapsUrl}" target="_blank">Google Maps</a></div>` : ""}
-            ${r.email ? `<div>Email: ${escapeHtml(r.email)}</div>` : ""}
           </div>
         `);
         infoWindow.open({ map, anchor: marker });
@@ -259,9 +259,11 @@
       const rows = results.map((r, i) => `
         <tr data-idx="${i}">
           <td>${escapeHtml(r.name)}</td>
+          <td>${escapeHtml(r.contactName || "")}</td>
+          <td>${escapeHtml(r.contactTitle || "")}</td>
+          <td>${escapeHtml(r.hunterEmail || r.email || "")}</td>
           <td>${escapeHtml(r.phone || "")}</td>
           <td>${escapeHtml(r.address || "")}</td>
-          <td>${escapeHtml(r.email || "")}</td>
           <td>${escapeHtml(String(r.rating || ""))}</td>
           <td>${escapeHtml(String(r.reviewCount || ""))}</td>
           <td>${r.website ? `<a href="${r.website}" target="_blank">Website</a>` : ""}</td>
@@ -273,10 +275,12 @@
         <table>
           <thead>
             <tr>
-              <th>Name</th>
+              <th>Business</th>
+              <th>Contact Name</th>
+              <th>Title</th>
+              <th>Email</th>
               <th>Phone</th>
               <th>Address</th>
-              <th>Email</th>
               <th>Rating</th>
               <th>Reviews</th>
               <th>Website</th>
@@ -365,7 +369,7 @@
 </script>
 
 <script
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD3aKyqlgr8raLl2z7GHg5GpbUMOUxNz4Y&callback=initMap"
+  src="https://maps.googleapis.com/maps/api/js?key=YOUR_BROWSER_MAPS_KEY_HERE&callback=initMap"
   async defer>
 </script>
 
