@@ -1,3 +1,11 @@
+const basicAuth = require('express-basic-auth');
+
+app.use(
+  basicAuth({
+    users: { admin: 'vpsbiz' },
+    challenge: true,
+  })
+);
 require("dotenv").config({ path: __dirname + "/.env" });
 
 const express = require("express");
@@ -396,5 +404,6 @@ app.post("/api/search.csv", async (req, res) => {
     res.status(500).json({ error: String(e.message || e) });
   }
 });
+
 
 app.listen(3000, () => console.log("Server running on http://127.0.0.1:3000"));
