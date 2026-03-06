@@ -36,12 +36,43 @@
     .controls-row { margin-top:12px; }
     .checkbox-row { margin-top:14px; display:flex; align-items:center; gap:8px; }
 
-    .scheduler-wrap {
-      margin-top: 28px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 16px;
-      background: #fafafa;
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal-box {
+      position: relative;
+      background: #fff;
+      width: 100%;
+      max-width: 900px;
+      max-height: 90vh;
+      overflow: auto;
+      border-radius: 10px;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      border: none;
+      background: transparent;
+      font-size: 28px;
+      cursor: pointer;
+      margin-top: 0;
+      padding: 0 6px;
     }
 
     .meetings-iframe-container {
@@ -76,6 +107,7 @@
     <div class="controls-row">
       <button id="searchBtn">Search</button>
       <button id="downloadBtn">Download CSV</button>
+      <button id="bookMeetingBtn">Book Meeting</button>
     </div>
 
     <div class="muted" id="status"></div>
@@ -89,12 +121,15 @@
 
 <div id="results"></div>
 
-<div class="scheduler-wrap">
-  <h3>Schedule a Consultation</h3>
-  <p class="muted">Book time directly on our calendar.</p>
-  <div
-    class="meetings-iframe-container"
-    data-src="https://meetings-na2.hubspot.com/joel-gambiana?embed=true">
+<!-- HubSpot Meeting Modal -->
+<div id="meetingModal" class="modal-overlay">
+  <div class="modal-box">
+    <button id="closeMeetingModal" class="modal-close">&times;</button>
+    <h3>Book Meeting</h3>
+    <div
+      class="meetings-iframe-container"
+      data-src="https://meetings-na2.hubspot.com/joel-gambiana?embed=true">
+    </div>
   </div>
 </div>
 
@@ -140,7 +175,7 @@
 
     const bounds = new google.maps.LatLngBounds();
 
-    results.forEach((r, idx) => {
+    results.forEach((r) => {
       const lat = Number(r.lat);
       const lng = Number(r.lng);
 
@@ -300,6 +335,30 @@
     URL.revokeObjectURL(url);
     status.textContent = "CSV Downloaded";
   }
+
+  const meetingModal = document.getElementById("meetingModal");
+  const bookMeetingBtn = document.getElementById("bookMeetingBtn");
+  const closeMeetingModal = document.getElementById("closeMeetingModal");
+
+  bookMeetingBtn.addEventListener("click", () => {
+    meetingModal.classList.add("show");
+  });
+
+  closeMeetingModal.addEventListener("click", () => {
+    meetingModal.classList.remove("show");
+  });
+
+  meetingModal.addEventListener("click", (e) => {
+    if (e.target === meetingModal) {
+      meetingModal.classList.remove("show");
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      meetingModal.classList.remove("show");
+    }
+  });
 
   document.getElementById("searchBtn").addEventListener("click", runSearch);
   document.getElementById("downloadBtn").addEventListener("click", downloadCsv);
