@@ -4,15 +4,23 @@ require("dotenv").config({ path: __dirname + "/.env" });
 const express = require("express");
 const cors = require("cors");
 const cheerio = require("cheerio");
+const path = require("path");
 
 const app = express();
-const HUNTER_API_KEY = process.env.HUNTER_API_KEY;
+
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "public")));
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+const HUNTER_API_KEY = process.env.HUNTER_API_KEY;
+
 console.log("GOOGLE_API_KEY loaded?", !!GOOGLE_API_KEY);
+console.log("HUNTER_API_KEY loaded?", !!HUNTER_API_KEY);
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -233,6 +241,112 @@ async function scrapeEmailsFromWebsite(websiteUrl) {
   return { emails: list, bestEmail };
 }
 
+function getDomainFromWebsite(websiteUrl) {
+  try {
+    const hostname = new URL(websiteUrl).hostname.toLowerCase();
+    return hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function pickBestHunterContact(emails = []) {
+  if (!Array.isArray(emails) || emails.length === 0) {
+    return {
+      contactName: "",
+      contactTitle: "",
+      hunterEmail: "",
+      hunterConfidence: "",
+      hunterSource: ""
+    };
+  }
+
+  const preferredTitleWords = [
+    "owner",
+    "founder",
+    "president",
+    "ceo",
+    "principal",
+    "partner",
+    "director",
+    "manager"
+  ];
+
+  const scored = [...emails].sort((a, b) => {
+    const aTitle = String(a.position || "").toLowerCase();
+    const bTitle = String(b.position || "").toLowerCase();
+
+    const aPreferred = preferredTitleWords.some(word => aTitle.includes(word)) ? 1 : 0;
+    const bPreferred = preferredTitleWords.some(word => bTitle.includes(word)) ? 1 : 0;
+
+    if (aPreferred !== bPreferred) return bPreferred - aPreferred;
+    return Number(b.confidence || 0) - Number(a.confidence || 0);
+  });
+
+  const best = scored[0] || {};
+  const fullName = [best.first_name, best.last_name].filter(Boolean).join(" ").trim();
+
+  let source = "";
+  if (Array.isArray(best.sources) && best.sources.length > 0) {
+    source = best.sources[0].uri || best.sources[0].domain || "";
+  }
+
+  return {
+    contactName: fullName,
+    contactTitle: best.position || "",
+    hunterEmail: best.value || "",
+    hunterConfidence: best.confidence || "",
+    hunterSource: source
+  };
+}
+
+async function hunterDomainSearch(domain) {
+  if (!HUNTER_API_KEY || !domain) {
+    return {
+      contactName: "",
+      contactTitle: "",
+      hunterEmail: "",
+      hunterConfidence: "",
+      hunterSource: ""
+    };
+  }
+
+  try {
+    const url =
+      "https://api.hunter.io/v2/domain-search?" +
+      new URLSearchParams({
+        domain,
+        api_key: HUNTER_API_KEY
+      });
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!res.ok || data.errors) {
+      console.error("Hunter domain search failed:", data);
+      return {
+        contactName: "",
+        contactTitle: "",
+        hunterEmail: "",
+        hunterConfidence: "",
+        hunterSource: ""
+      };
+    }
+
+    const emails = data?.data?.emails || [];
+    return pickBestHunterContact(emails);
+  } catch (err) {
+    console.error("Hunter error:", err.message || err);
+    return {
+      contactName: "",
+      contactTitle: "",
+      hunterEmail: "",
+      hunterConfidence: "",
+      hunterSource: ""
+    };
+  }
+}
+
 async function mapLimit(items, limit, asyncFn) {
   const results = new Array(items.length);
   let index = 0;
@@ -255,7 +369,7 @@ async function mapLimit(items, limit, asyncFn) {
 }
 
 async function buildResults({ location, businessType, radiusMiles = 10, maxResults = 60, scrapeEmails = true }) {
-  if (!GOOGLE_API_KEY) throw new Error("Missing GOOGLE_API_KEY on server (check Backend/.env)");
+  if (!GOOGLE_API_KEY) throw new Error("Missing GOOGLE_API_KEY on server");
   if (!location || !businessType) throw new Error("location and businessType are required");
 
   const geo = await geocodeLocation(location);
@@ -297,18 +411,28 @@ async function buildResults({ location, businessType, radiusMiles = 10, maxResul
       bestEmail = emailData.bestEmail || "";
     }
 
+    const domain = getDomainFromWebsite(website);
+    const hunterData = await hunterDomainSearch(domain);
+    const finalEmail = hunterData.hunterEmail || bestEmail || "";
+
     return {
       name: (r && r.name) || p.name || "",
       phone: (r && (r.formatted_phone_number || r.international_phone_number)) || "",
       address: (r && r.formatted_address) || p.formatted_address || "",
       website,
+      domain,
       googleMapsUrl: (r && r.url) || "",
       rating: (r && r.rating) || "",
       reviewCount: (r && r.user_ratings_total) || "",
       lat: (p.geometry && p.geometry.location && p.geometry.location.lat) || "",
       lng: (p.geometry && p.geometry.location && p.geometry.location.lng) || "",
-      email: bestEmail,
+      email: finalEmail,
       allEmails: emails.join("; "),
+      contactName: hunterData.contactName || "",
+      contactTitle: hunterData.contactTitle || "",
+      hunterEmail: hunterData.hunterEmail || "",
+      hunterConfidence: hunterData.hunterConfidence || "",
+      hunterSource: hunterData.hunterSource || ""
     };
   });
 
@@ -370,12 +494,18 @@ app.post("/api/search.csv", async (req, res) => {
     });
 
     const headers = [
-      { label: "Name", key: "name" },
+      { label: "Business Name", key: "name" },
       { label: "Phone", key: "phone" },
       { label: "Address", key: "address" },
       { label: "Website", key: "website" },
-      { label: "Email", key: "email" },
-      { label: "All Emails", key: "allEmails" },
+      { label: "Domain", key: "domain" },
+      { label: "Contact Name", key: "contactName" },
+      { label: "Contact Title", key: "contactTitle" },
+      { label: "Hunter Email", key: "hunterEmail" },
+      { label: "Hunter Confidence", key: "hunterConfidence" },
+      { label: "Hunter Source", key: "hunterSource" },
+      { label: "Best Email", key: "email" },
+      { label: "All Scraped Emails", key: "allEmails" },
       { label: "Rating", key: "rating" },
       { label: "Review Count", key: "reviewCount" },
       { label: "Google Maps URL", key: "googleMapsUrl" },
@@ -398,7 +528,4 @@ app.post("/api/search.csv", async (req, res) => {
   }
 });
 
-
 app.listen(3000, () => console.log("Server running on http://127.0.0.1:3000"));
-
-
