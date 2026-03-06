@@ -32,8 +32,22 @@
     th, td { border:1px solid #ddd; padding:10px; vertical-align:top; }
     th { text-align:left; background:#f6f6f6; position:sticky; top:0; }
     tr:hover { background:#fafafa; }
+
     .controls-row { margin-top:12px; }
     .checkbox-row { margin-top:14px; display:flex; align-items:center; gap:8px; }
+
+    .scheduler-wrap {
+      margin-top: 28px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      background: #fafafa;
+    }
+
+    .meetings-iframe-container {
+      min-height: 700px;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
@@ -74,6 +88,15 @@
 </div>
 
 <div id="results"></div>
+
+<div class="scheduler-wrap">
+  <h3>Schedule a Consultation</h3>
+  <p class="muted">Book time directly on our calendar.</p>
+  <div
+    class="meetings-iframe-container"
+    data-src="https://meetings-na2.hubspot.com/joel-gambiana?embed=true">
+  </div>
+</div>
 
 <script>
   const apiUrl = "/api/search";
@@ -288,6 +311,7 @@
 </script>
 
 <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
+<script src="https://static.hsappstatic.net/MeetingsEmbed/ex/MeetingsEmbedCode.js"></script>
 
 </body>
 </html>
