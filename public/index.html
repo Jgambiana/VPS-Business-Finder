@@ -1,382 +1,440 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>VPS Business Finder</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 1200px; margin: 30px auto; padding: 0 10px; }
-    label { display:block; margin-top:12px; font-weight:600; }
-    input[type="text"], input[type="number"] { width:100%; padding:10px; margin-top:6px; box-sizing:border-box; }
-    button { margin-top:14px; padding:10px 14px; cursor:pointer; }
-    .muted { color:#666; font-size:0.9em; margin-top:10px; }
+<meta charset="utf-8" />
+<title>VPS Business Finder</title>
 
-    .layout {
-      display:grid;
-      grid-template-columns: 380px 1fr;
-      gap: 16px;
-      align-items:start;
-    }
+<style>
+body { font-family: Arial, sans-serif; max-width: 1200px; margin: 30px auto; padding: 0 10px; }
+label { display:block; margin-top:12px; font-weight:600; }
+input[type="text"], input[type="number"] { width:100%; padding:10px; margin-top:6px; box-sizing:border-box; }
+button { margin-top:14px; padding:10px 14px; cursor:pointer; }
+.muted { color:#666; font-size:0.9em; margin-top:10px; }
 
-    @media (max-width: 1000px) {
-      .layout { grid-template-columns: 1fr; }
-    }
+.layout { display:grid; grid-template-columns: 380px 1fr; gap:16px; align-items:start; }
 
-    #map {
-      width:100%;
-      height:460px;
-      border:1px solid #ddd;
-      border-radius:8px;
-    }
+@media (max-width:1000px){
+.layout{ grid-template-columns:1fr;}
+}
 
-    table { width:100%; border-collapse:collapse; margin-top:18px; font-size:14px; }
-    th, td { border:1px solid #ddd; padding:10px; vertical-align:top; }
-    th { text-align:left; background:#f6f6f6; position:sticky; top:0; }
-    tr:hover { background:#fafafa; }
+#map{
+width:100%;
+height:460px;
+border:1px solid #ddd;
+border-radius:8px;
+}
 
-    .controls-row { margin-top:12px; }
-    .checkbox-row { margin-top:14px; display:flex; align-items:center; gap:8px; }
+table{ width:100%; border-collapse:collapse; margin-top:18px; font-size:14px;}
+th,td{ border:1px solid #ddd; padding:10px; vertical-align:top;}
+th{ text-align:left; background:#f6f6f6; position:sticky; top:0;}
+tr:hover{ background:#fafafa;}
 
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.55);
-      z-index: 9999;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
-    }
+.controls-row{ margin-top:12px;}
+.checkbox-row{ margin-top:14px; display:flex; align-items:center; gap:8px;}
 
-    .modal-overlay.show {
-      display: flex;
-    }
+.modal-overlay{
+display:none;
+position:fixed;
+inset:0;
+background:rgba(0,0,0,0.55);
+z-index:9999;
+justify-content:center;
+align-items:center;
+padding:20px;
+}
 
-    .modal-box {
-      position: relative;
-      background: #fff;
-      width: 100%;
-      max-width: 900px;
-      max-height: 90vh;
-      overflow: auto;
-      border-radius: 10px;
-      padding: 20px;
-      box-sizing: border-box;
-    }
+.modal-overlay.show{display:flex;}
 
-    .modal-close {
-      position: absolute;
-      top: 10px;
-      right: 12px;
-      border: none;
-      background: transparent;
-      font-size: 28px;
-      cursor: pointer;
-      margin-top: 0;
-      padding: 0 6px;
-    }
+.modal-box{
+position:relative;
+background:#fff;
+width:100%;
+max-width:900px;
+max-height:90vh;
+overflow:auto;
+border-radius:10px;
+padding:20px;
+box-sizing:border-box;
+}
 
-    .meetings-iframe-container {
-      min-height: 700px;
-      width: 100%;
-    }
-  </style>
+.modal-close{
+position:absolute;
+top:10px;
+right:12px;
+border:none;
+background:transparent;
+font-size:28px;
+cursor:pointer;
+margin-top:0;
+padding:0 6px;
+}
+
+.meetings-iframe-container{
+min-height:700px;
+width:100%;
+}
+</style>
 </head>
+
 <body>
 
 <h2>VPS Business Finder</h2>
 
 <div class="layout">
-  <div>
-    <label>ZIP or Location</label>
-    <input id="location" type="text" placeholder="55344 or Eden Prairie, MN" />
 
-    <label>Business Type</label>
-    <input id="businessType" type="text" placeholder="restaurant" />
+<div>
 
-    <label>Radius (miles)</label>
-    <input id="radiusMiles" type="number" value="10" min="1" max="30" />
+<label>ZIP or Location</label>
+<input id="location" type="text" placeholder="55344 or Eden Prairie, MN"/>
 
-    <label>Max Results</label>
-    <input id="maxResults" type="number" value="60" min="1" max="120" />
+<label>Business Type</label>
+<input id="businessType" type="text" placeholder="restaurant"/>
 
-    <div class="checkbox-row">
-      <input id="scrapeEmails" type="checkbox" checked />
-      <label for="scrapeEmails" style="margin:0;">Scrape emails from websites</label>
-    </div>
+<label>Radius (miles)</label>
+<input id="radiusMiles" type="number" value="10" min="1" max="30"/>
 
-    <div class="controls-row">
-      <button id="searchBtn">Search</button>
-      <button id="downloadBtn">Download CSV</button>
-      <button id="bookMeetingBtn">Book Meeting</button>
-    </div>
+<label>Max Results</label>
+<input id="maxResults" type="number" value="60" min="1" max="120"/>
 
-    <div class="muted" id="status"></div>
-  </div>
+<div class="checkbox-row">
+<input id="scrapeEmails" type="checkbox" checked/>
+<label for="scrapeEmails" style="margin:0;">Scrape emails from websites</label>
+</div>
 
-  <div>
-    <div id="map"></div>
-    <div class="muted">Pins are clustered. Click a table row to focus its pin.</div>
-  </div>
+<div class="controls-row">
+<button id="searchBtn">Search</button>
+<button id="downloadBtn">Download CSV</button>
+<button id="bookMeetingBtn">Book Meeting</button>
+</div>
+
+<div class="muted" id="status"></div>
+
+</div>
+
+<div>
+<div id="map"></div>
+<div class="muted">Pins are clustered. Click a table row to focus its pin.</div>
+</div>
+
 </div>
 
 <div id="results"></div>
 
 <div id="meetingModal" class="modal-overlay">
-  <div class="modal-box">
-    <button id="closeMeetingModal" class="modal-close">&times;</button>
-    <h3>Book Meeting</h3>
-    <div
-      class="meetings-iframe-container"
-      data-src="https://meetings-na2.hubspot.com/david28/meeting-form">
-    </div>
-  </div>
+<div class="modal-box">
+<button id="closeMeetingModal" class="modal-close">&times;</button>
+<h3>Book Meeting</h3>
+<div class="meetings-iframe-container"
+data-src="https://meetings-na2.hubspot.com/david28/meeting-form">
+</div>
+</div>
 </div>
 
 <script>
-  const apiUrl = "/api/search";
 
-  function escapeHtml(str) {
-    return (str || "").replace(/[&<>"']/g, m => ({
-      "&":"&amp;",
-      "<":"&lt;",
-      ">":"&gt;",
-      '"':"&quot;",
-      "'":"&#039;"
-    }[m]));
-  }
+const apiUrl="/api/search";
+const INTAKE_FORM_URL="https://quiet-recipe-ef97.jgambiana.workers.dev/";
 
-  let map;
-  let markers = [];
-  let markerCluster;
-  let infoWindow;
+function escapeHtml(str){
+return(str||"").replace(/[&<>"']/g,m=>({
+"&":"&amp;",
+"<":"&lt;",
+">":"&gt;",
+'"':"&quot;",
+"'":"&#039;"
+}[m]));
+}
 
-  function initMap() {
-    map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 44.9778, lng: -93.2650 },
-      zoom: 10,
-    });
+function openIntakeForm(business){
 
-    infoWindow = new google.maps.InfoWindow();
-  }
+const params=new URLSearchParams({
 
-  function clearMapMarkers() {
-    if (markerCluster) {
-      markerCluster.clearMarkers();
-      markerCluster = null;
-    }
+companyName:business.name||"",
+companyPhone:(business.phone||"").replace(/\D/g,""),
+companyPhoneCode:"+1",
+companyEmail:business.hunterEmail||business.email||"",
+city:(business.address||"").split(",")[1]?.trim()||"",
+state:(business.address||"").split(",")[2]?.trim()||"",
+website:business.website||"",
+notes:`Lead Source: VPS Business Finder
+Address: ${business.address||""}
+Rating: ${business.rating||""}
+Reviews: ${business.reviewCount||""}`
 
-    markers.forEach(m => m.setMap(null));
-    markers = [];
-  }
+});
 
-  function plotResultsOnMap(results) {
-    clearMapMarkers();
+window.open(`${INTAKE_FORM_URL}/?${params.toString()}`,"_blank");
 
-    const bounds = new google.maps.LatLngBounds();
+}
 
-    results.forEach((r) => {
-      const lat = Number(r.lat);
-      const lng = Number(r.lng);
+let map;
+let markers=[];
+let markerCluster;
+let infoWindow;
 
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+function initMap(){
 
-      const marker = new google.maps.Marker({
-        position: { lat, lng },
-        title: r.name || ""
-      });
+map=new google.maps.Map(document.getElementById("map"),{
+center:{lat:44.9778,lng:-93.2650},
+zoom:10
+});
 
-      marker.addListener("click", () => {
-        infoWindow.setContent(`
-          <div style="font-family:Arial;font-size:14px;max-width:260px;">
-            <div style="font-weight:bold;margin-bottom:4px;">${escapeHtml(r.name || "")}</div>
-            <div>${escapeHtml(r.contactName || "")} ${r.contactTitle ? `- ${escapeHtml(r.contactTitle)}` : ""}</div>
-            <div>${escapeHtml(r.address || "")}</div>
-            <div>${escapeHtml(r.phone || "")}</div>
-            <div>Email: ${escapeHtml(r.hunterEmail || r.email || "")}</div>
-            <div>Rating: ${escapeHtml(String(r.rating || ""))} ${r.reviewCount ? `(${escapeHtml(String(r.reviewCount))})` : ""}</div>
-            ${r.website ? `<div><a href="${r.website}" target="_blank">Website</a></div>` : ""}
-            ${r.googleMapsUrl ? `<div><a href="${r.googleMapsUrl}" target="_blank">Google Maps</a></div>` : ""}
-          </div>
-        `);
-        infoWindow.open({ map, anchor: marker });
-      });
+infoWindow=new google.maps.InfoWindow();
 
-      markers.push(marker);
-      bounds.extend({ lat, lng });
-    });
+}
 
-    if (markers.length) {
-      markerCluster = new markerClusterer.MarkerClusterer({ map, markers });
-      map.fitBounds(bounds);
-    }
-  }
+function clearMapMarkers(){
 
-  function focusMarker(index) {
-    const marker = markers[index];
-    if (!marker) return;
-    map.panTo(marker.getPosition());
-    map.setZoom(15);
-    google.maps.event.trigger(marker, "click");
-  }
+if(markerCluster){
+markerCluster.clearMarkers();
+markerCluster=null;
+}
 
-  async function runSearch() {
-    const location = document.getElementById("location").value.trim();
-    const businessType = document.getElementById("businessType").value.trim();
-    const radiusMiles = Number(document.getElementById("radiusMiles").value || 10);
-    const maxResults = Number(document.getElementById("maxResults").value || 60);
-    const scrapeEmails = document.getElementById("scrapeEmails").checked;
+markers.forEach(m=>m.setMap(null));
+markers=[];
 
-    const status = document.getElementById("status");
-    const resultsDiv = document.getElementById("results");
+}
 
-    if (!location || !businessType) {
-      status.textContent = "Please enter a location and business type.";
-      return;
-    }
+function plotResultsOnMap(results){
 
-    resultsDiv.innerHTML = "";
-    status.textContent = "Searching...";
+clearMapMarkers();
 
-    try {
-      const res = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify({ location, businessType, radiusMiles, maxResults, scrapeEmails })
-      });
+const bounds=new google.maps.LatLngBounds();
 
-      const data = await res.json();
+results.forEach((r)=>{
 
-      if (!res.ok) {
-        status.textContent = data.error || "Search failed.";
-        return;
-      }
+const lat=Number(r.lat);
+const lng=Number(r.lng);
 
-      status.textContent = `Found ${data.count} results`;
-      const results = data.results || [];
+if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
 
-      plotResultsOnMap(results);
+const marker=new google.maps.Marker({
+position:{lat,lng},
+title:r.name||""
+});
 
-      const rows = results.map((r, i) => `
-        <tr data-idx="${i}">
-          <td>${escapeHtml(r.name)}</td>
-          <td>${escapeHtml(r.contactName || "")}</td>
-          <td>${escapeHtml(r.contactTitle || "")}</td>
-          <td>${escapeHtml(r.hunterEmail || r.email || "")}</td>
-          <td>${escapeHtml(r.phone || "")}</td>
-          <td>${escapeHtml(r.address || "")}</td>
-          <td>${escapeHtml(String(r.rating || ""))}</td>
-          <td>${escapeHtml(String(r.reviewCount || ""))}</td>
-          <td>${r.website ? `<a href="${r.website}" target="_blank">Website</a>` : ""}</td>
-          <td>${r.googleMapsUrl ? `<a href="${r.googleMapsUrl}" target="_blank">Map</a>` : ""}</td>
-        </tr>
-      `).join("");
+marker.addListener("click",()=>{
 
-      resultsDiv.innerHTML = `
-        <table>
-          <thead>
-            <tr>
-              <th>Business</th>
-              <th>Contact Name</th>
-              <th>Title</th>
-              <th>Email</th>
-              <th>Phone</th>
-              <th>Address</th>
-              <th>Rating</th>
-              <th>Reviews</th>
-              <th>Website</th>
-              <th>Google</th>
-            </tr>
-          </thead>
-          <tbody id="resultsBody">${rows}</tbody>
-        </table>
-      `;
+infoWindow.setContent(`
+<div style="font-family:Arial;font-size:14px;max-width:260px;">
+<div style="font-weight:bold;margin-bottom:4px;">${escapeHtml(r.name||"")}</div>
+<div>${escapeHtml(r.contactName||"")} ${r.contactTitle?`- ${escapeHtml(r.contactTitle)}`:""}</div>
+<div>${escapeHtml(r.address||"")}</div>
+<div>${escapeHtml(r.phone||"")}</div>
+<div>Email: ${escapeHtml(r.hunterEmail||r.email||"")}</div>
+<div>Rating: ${escapeHtml(String(r.rating||""))} ${r.reviewCount?`(${escapeHtml(String(r.reviewCount))})`:""}</div>
+${r.website?`<div><a href="${r.website}" target="_blank">Website</a></div>`:""}
+${r.googleMapsUrl?`<div><a href="${r.googleMapsUrl}" target="_blank">Google Maps</a></div>`:""}
+</div>
+`);
 
-      document.getElementById("resultsBody").addEventListener("click", (e) => {
-        const tr = e.target.closest("tr");
-        if (!tr) return;
-        const idx = Number(tr.getAttribute("data-idx"));
-        focusMarker(idx);
-      });
+infoWindow.open({map,anchor:marker});
 
-    } catch (e) {
-      console.error(e);
-      status.textContent = "Error contacting server";
-    }
-  }
+});
 
-  async function downloadCsv() {
-    const location = document.getElementById("location").value.trim();
-    const businessType = document.getElementById("businessType").value.trim();
-    const radiusMiles = Number(document.getElementById("radiusMiles").value || 10);
-    const maxResults = Number(document.getElementById("maxResults").value || 60);
-    const scrapeEmails = document.getElementById("scrapeEmails").checked;
+markers.push(marker);
+bounds.extend({lat,lng});
 
-    const status = document.getElementById("status");
-    status.textContent = "Preparing CSV...";
+});
 
-    const res = await fetch("/api/search.csv", {
-      method: "POST",
-      headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({ location, businessType, radiusMiles, maxResults, scrapeEmails })
-    });
+if(markers.length){
+markerCluster=new markerClusterer.MarkerClusterer({map,markers});
+map.fitBounds(bounds);
+}
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      status.textContent = err.error || "CSV export failed";
-      return;
-    }
+}
 
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
+function focusMarker(index){
 
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "business_results.csv";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+const marker=markers[index];
+if(!marker)return;
 
-    URL.revokeObjectURL(url);
-    status.textContent = "CSV Downloaded";
-  }
+map.panTo(marker.getPosition());
+map.setZoom(15);
+google.maps.event.trigger(marker,"click");
 
-  const meetingModal = document.getElementById("meetingModal");
-  const bookMeetingBtn = document.getElementById("bookMeetingBtn");
-  const closeMeetingModal = document.getElementById("closeMeetingModal");
+}
 
-  bookMeetingBtn.addEventListener("click", () => {
-    meetingModal.classList.add("show");
-  });
+async function runSearch(){
 
-  closeMeetingModal.addEventListener("click", () => {
-    meetingModal.classList.remove("show");
-  });
+const location=document.getElementById("location").value.trim();
+const businessType=document.getElementById("businessType").value.trim();
+const radiusMiles=Number(document.getElementById("radiusMiles").value||10);
+const maxResults=Number(document.getElementById("maxResults").value||60);
+const scrapeEmails=document.getElementById("scrapeEmails").checked;
 
-  meetingModal.addEventListener("click", (e) => {
-    if (e.target === meetingModal) {
-      meetingModal.classList.remove("show");
-    }
-  });
+const status=document.getElementById("status");
+const resultsDiv=document.getElementById("results");
 
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      meetingModal.classList.remove("show");
-    }
-  });
+if(!location||!businessType){
+status.textContent="Please enter a location and business type.";
+return;
+}
 
-  document.getElementById("searchBtn").addEventListener("click", runSearch);
-  document.getElementById("downloadBtn").addEventListener("click", downloadCsv);
+resultsDiv.innerHTML="";
+status.textContent="Searching...";
+
+try{
+
+const res=await fetch(apiUrl,{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({location,businessType,radiusMiles,maxResults,scrapeEmails})
+});
+
+const data=await res.json();
+
+if(!res.ok){
+status.textContent=data.error||"Search failed.";
+return;
+}
+
+status.textContent=`Found ${data.count} results`;
+
+const results=data.results||[];
+
+window.currentResults=results;
+
+plotResultsOnMap(results);
+
+const rows=results.map((r,i)=>`
+
+<tr data-idx="${i}">
+
+<td>${escapeHtml(r.name)}</td>
+<td>${escapeHtml(r.contactName||"")}</td>
+<td>${escapeHtml(r.contactTitle||"")}</td>
+<td>${escapeHtml(r.hunterEmail||r.email||"")}</td>
+<td>${escapeHtml(r.phone||"")}</td>
+<td>${escapeHtml(r.address||"")}</td>
+<td>${escapeHtml(String(r.rating||""))}</td>
+<td>${escapeHtml(String(r.reviewCount||""))}</td>
+
+<td>${r.website?`<a href="${r.website}" target="_blank">Website</a>`:""}</td>
+<td>${r.googleMapsUrl?`<a href="${r.googleMapsUrl}" target="_blank">Map</a>`:""}</td>
+
+<td><button class="prospectBtn" data-idx="${i}">Create Prospect</button></td>
+
+</tr>
+
+`).join("");
+
+resultsDiv.innerHTML=`
+
+<table>
+
+<thead>
+<tr>
+
+<th>Business</th>
+<th>Contact Name</th>
+<th>Title</th>
+<th>Email</th>
+<th>Phone</th>
+<th>Address</th>
+<th>Rating</th>
+<th>Reviews</th>
+<th>Website</th>
+<th>Google</th>
+<th>Prospect</th>
+
+</tr>
+</thead>
+
+<tbody id="resultsBody">${rows}</tbody>
+
+</table>
+
+`;
+
+document.getElementById("resultsBody").addEventListener("click",(e)=>{
+
+const tr=e.target.closest("tr");
+if(!tr)return;
+
+const idx=Number(tr.getAttribute("data-idx"));
+const business=window.currentResults[idx];
+
+if(e.target.classList.contains("prospectBtn")){
+openIntakeForm(business);
+return;
+}
+
+focusMarker(idx);
+
+});
+
+}catch(e){
+
+console.error(e);
+status.textContent="Error contacting server";
+
+}
+
+}
+
+async function downloadCsv(){
+
+const location=document.getElementById("location").value.trim();
+const businessType=document.getElementById("businessType").value.trim();
+const radiusMiles=Number(document.getElementById("radiusMiles").value||10);
+const maxResults=Number(document.getElementById("maxResults").value||60);
+const scrapeEmails=document.getElementById("scrapeEmails").checked;
+
+const status=document.getElementById("status");
+status.textContent="Preparing CSV...";
+
+const res=await fetch("/api/search.csv",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({location,businessType,radiusMiles,maxResults,scrapeEmails})
+});
+
+if(!res.ok){
+const err=await res.json().catch(()=>({}));
+status.textContent=err.error||"CSV export failed";
+return;
+}
+
+const blob=await res.blob();
+const url=URL.createObjectURL(blob);
+
+const a=document.createElement("a");
+a.href=url;
+a.download="business_results.csv";
+document.body.appendChild(a);
+a.click();
+a.remove();
+
+URL.revokeObjectURL(url);
+
+status.textContent="CSV Downloaded";
+
+}
+
+const meetingModal=document.getElementById("meetingModal");
+const bookMeetingBtn=document.getElementById("bookMeetingBtn");
+const closeMeetingModal=document.getElementById("closeMeetingModal");
+
+bookMeetingBtn.addEventListener("click",()=>{meetingModal.classList.add("show");});
+closeMeetingModal.addEventListener("click",()=>{meetingModal.classList.remove("show");});
+
+meetingModal.addEventListener("click",(e)=>{
+if(e.target===meetingModal){meetingModal.classList.remove("show");}
+});
+
+document.addEventListener("keydown",(e)=>{
+if(e.key==="Escape"){meetingModal.classList.remove("show");}
+});
+
+document.getElementById("searchBtn").addEventListener("click",runSearch);
+document.getElementById("downloadBtn").addEventListener("click",downloadCsv);
+
 </script>
 
-<script
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD3aKyqlgr8raLl2z7GHg5GpbUMOUxNz4Y&callback=initMap"
-  async defer>
-</script>
-
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD3aKyqlgr8raLl2z7GHg5GpbUMOUxNz4Y&callback=initMap" async defer></script>
 <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
 <script src="https://static.hsappstatic.net/MeetingsEmbed/ex/MeetingsEmbedCode.js"></script>
 
 </body>
 </html>
-
-
