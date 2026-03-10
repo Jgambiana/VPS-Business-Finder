@@ -133,37 +133,50 @@ data-src="https://meetings-na2.hubspot.com/david28/meeting-form">
 <script>
 
 const apiUrl="/api/search";
-const INTAKE_FORM_URL="https://quiet-recipe-ef97.jgambiana.workers.dev/";
+// URL of your intake form
+const INTAKE_FORM_URL = "https://quiet-recipe-ef97.jgambiana.workers.dev/";
 
-function escapeHtml(str){
-return(str||"").replace(/[&<>"']/g,m=>({
-"&":"&amp;",
-"<":"&lt;",
-">":"&gt;",
-'"':"&quot;",
-"'":"&#039;"
-}[m]));
+function parseAddressParts(address) {
+
+  const parts = (address || "").split(",").map(p => p.trim());
+
+  const city = parts[1] || "";
+  const stateZip = parts[2] || "";
+
+  const state = stateZip.split(" ")[0] || "";
+  const zip = stateZip.split(" ").slice(1).join(" ") || "";
+
+  return { city, state, zip };
+
 }
 
-function openIntakeForm(business){
+function openIntakeForm(business) {
 
-const params=new URLSearchParams({
+  const parsed = parseAddressParts(business.address || "");
 
-companyName:business.name||"",
-companyPhone:(business.phone||"").replace(/\D/g,""),
-companyPhoneCode:"+1",
-companyEmail:business.hunterEmail||business.email||"",
-city:(business.address||"").split(",")[1]?.trim()||"",
-state:(business.address||"").split(",")[2]?.trim()||"",
-website:business.website||"",
-notes:`Lead Source: VPS Business Finder
-Address: ${business.address||""}
-Rating: ${business.rating||""}
-Reviews: ${business.reviewCount||""}`
+  const params = new URLSearchParams({
 
-});
+    companyName: business.name || "",
+    companyPhone: (business.phone || "").replace(/\D/g,""),
+    companyPhoneCode: "+1",
 
-window.open(`${INTAKE_FORM_URL}/?${params.toString()}`,"_blank");
+    companyEmail: business.hunterEmail || business.email || "",
+
+    city: parsed.city,
+    state: parsed.state,
+    zip: parsed.zip,
+
+    website: business.website || "",
+
+    notes:
+`Lead Source: VPS Business Finder
+Address: ${business.address || ""}
+Rating: ${business.rating || ""}
+Reviews: ${business.reviewCount || ""}`
+
+  });
+
+  window.open(`${INTAKE_FORM_URL}/?${params.toString()}`, "_blank");
 
 }
 
@@ -310,8 +323,9 @@ const rows=results.map((r,i)=>`
 <td>${escapeHtml(String(r.rating||""))}</td>
 <td>${escapeHtml(String(r.reviewCount||""))}</td>
 
-<td>${r.website?`<a href="${r.website}" target="_blank">Website</a>`:""}</td>
-<td>${r.googleMapsUrl?`<a href="${r.googleMapsUrl}" target="_blank">Map</a>`:""}</td>
+<td>${r.website ? `<a href="${r.website}" target="_blank">Website</a>` : ""}</td>
+<td>${r.googleMapsUrl ? `<a href="${r.googleMapsUrl}" target="_blank">Map</a>` : ""}</td>
+<td><button class="prospectBtn" data-idx="${i}">Create Prospect</button></td>
 
 <td><button class="prospectBtn" data-idx="${i}">Create Prospect</button></td>
 
@@ -347,20 +361,20 @@ resultsDiv.innerHTML=`
 
 `;
 
-document.getElementById("resultsBody").addEventListener("click",(e)=>{
+document.getElementById("resultsBody").addEventListener("click", (e) => {
 
-const tr=e.target.closest("tr");
-if(!tr)return;
+  const tr = e.target.closest("tr");
+  if (!tr) return;
 
-const idx=Number(tr.getAttribute("data-idx"));
-const business=window.currentResults[idx];
+  const idx = Number(tr.getAttribute("data-idx"));
+  const business = window.currentResults[idx];
 
-if(e.target.classList.contains("prospectBtn")){
-openIntakeForm(business);
-return;
-}
+  if (e.target.classList.contains("prospectBtn")) {
+    openIntakeForm(business);
+    return;
+  }
 
-focusMarker(idx);
+  focusMarker(idx);
 
 });
 
@@ -438,3 +452,4 @@ document.getElementById("downloadBtn").addEventListener("click",downloadCsv);
 
 </body>
 </html>
+
