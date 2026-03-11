@@ -312,6 +312,9 @@ async function hunterDomainSearch(domain) {
   }
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
     const url =
       "https://api.hunter.io/v2/domain-search?" +
       new URLSearchParams({
@@ -319,11 +322,25 @@ async function hunterDomainSearch(domain) {
         api_key: HUNTER_API_KEY
       });
 
-    const res = await fetch(url);
-    const data = await res.json();
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "VPSBusinessFinder/1.0"
+      }
+    });
+
+    clearTimeout(timeout);
+
+    let data = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
 
     if (!res.ok || data.errors) {
-      console.error("Hunter domain search failed:", data);
+      console.error("Hunter domain search failed:", res.status, data);
       return {
         contactName: "",
         contactTitle: "",
@@ -529,3 +546,4 @@ app.post("/api/search.csv", async (req, res) => {
 });
 
 app.listen(3000, () => console.log("Server running on http://127.0.0.1:3000"));
+
