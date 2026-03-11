@@ -385,9 +385,25 @@ async function mapLimit(items, limit, asyncFn) {
   return results;
 }
 
-async function buildResults({ location, businessType, radiusMiles = 10, maxResults = 60, scrapeEmails = true }) {
+async function buildResults({
+  location,
+  businessType,
+  radiusMiles = 10,
+  maxResults = 60,
+  scrapeEmails = true,
+  useHunter = true
+}) {
   if (!GOOGLE_API_KEY) throw new Error("Missing GOOGLE_API_KEY on server");
   if (!location || !businessType) throw new Error("location and businessType are required");
+
+  console.log("buildResults start:", {
+    location,
+    businessType,
+    radiusMiles,
+    maxResults,
+    scrapeEmails,
+    useHunter
+  });
 
   const geo = await geocodeLocation(location);
   if (!geo) throw new Error("Could not geocode location");
@@ -403,6 +419,8 @@ async function buildResults({ location, businessType, radiusMiles = 10, maxResul
     maxResults: Math.min(Number(maxResults) || 60, 120),
   });
 
+  console.log("Places returned:", places.length);
+
   const uniquePlaces = [];
   const seen = new Set();
 
@@ -414,53 +432,100 @@ async function buildResults({ location, businessType, radiusMiles = 10, maxResul
     }
   }
 
-  const detailed = await mapLimit(uniquePlaces, 6, async (p) => {
-    const details = await placeDetails(p.place_id);
-    const r = details.result;
+  console.log("Unique places:", uniquePlaces.length);
 
-    let emails = [];
-    let bestEmail = "";
+  const detailed = await mapLimit(uniquePlaces, 4, async (p) => {
+    try {
+      const details = await placeDetails(p.place_id);
+      const r = details.result;
 
-    const website = (r && r.website) || "";
-    if (scrapeEmails && website) {
-      const emailData = await scrapeEmailsFromWebsite(website);
-      emails = emailData.emails;
-      bestEmail = emailData.bestEmail || "";
+      let emails = [];
+      let bestEmail = "";
+
+      const website = (r && r.website) || "";
+      const domain = getDomainFromWebsite(website);
+
+      if (scrapeEmails && website) {
+        try {
+          const emailData = await scrapeEmailsFromWebsite(website);
+          emails = emailData.emails || [];
+          bestEmail = emailData.bestEmail || "";
+        } catch (err) {
+          console.error("Email scrape failed:", website, err.message || err);
+        }
+      }
+
+      let hunterData = {
+        contactName: "",
+        contactTitle: "",
+        hunterEmail: "",
+        hunterConfidence: "",
+        hunterSource: ""
+      };
+
+      if (useHunter && domain) {
+        try {
+          hunterData = await hunterDomainSearch(domain);
+        } catch (err) {
+          console.error("Hunter lookup failed:", domain, err.message || err);
+        }
+      }
+
+      const finalEmail = hunterData.hunterEmail || bestEmail || "";
+
+      return {
+        name: (r && r.name) || p.name || "",
+        phone: (r && (r.formatted_phone_number || r.international_phone_number)) || "",
+        address: (r && r.formatted_address) || p.formatted_address || "",
+        website,
+        domain,
+        googleMapsUrl: (r && r.url) || "",
+        rating: (r && r.rating) || "",
+        reviewCount: (r && r.user_ratings_total) || "",
+        lat: (p.geometry && p.geometry.location && p.geometry.location.lat) || "",
+        lng: (p.geometry && p.geometry.location && p.geometry.location.lng) || "",
+        email: finalEmail,
+        allEmails: emails.join("; "),
+        contactName: hunterData.contactName || "",
+        contactTitle: hunterData.contactTitle || "",
+        hunterEmail: hunterData.hunterEmail || "",
+        hunterConfidence: hunterData.hunterConfidence || "",
+        hunterSource: hunterData.hunterSource || ""
+      };
+    } catch (err) {
+      console.error("Place processing failed:", p.place_id || p.name, err.message || err);
+      return null;
     }
-
-    const domain = getDomainFromWebsite(website);
-    const hunterData = await hunterDomainSearch(domain);
-    const finalEmail = hunterData.hunterEmail || bestEmail || "";
-
-    return {
-      name: (r && r.name) || p.name || "",
-      phone: (r && (r.formatted_phone_number || r.international_phone_number)) || "",
-      address: (r && r.formatted_address) || p.formatted_address || "",
-      website,
-      domain,
-      googleMapsUrl: (r && r.url) || "",
-      rating: (r && r.rating) || "",
-      reviewCount: (r && r.user_ratings_total) || "",
-      lat: (p.geometry && p.geometry.location && p.geometry.location.lat) || "",
-      lng: (p.geometry && p.geometry.location && p.geometry.location.lng) || "",
-      email: finalEmail,
-      allEmails: emails.join("; "),
-      contactName: hunterData.contactName || "",
-      contactTitle: hunterData.contactTitle || "",
-      hunterEmail: hunterData.hunterEmail || "",
-      hunterConfidence: hunterData.hunterConfidence || "",
-      hunterSource: hunterData.hunterSource || ""
-    };
   });
+
+  const finalResults = detailed.filter(Boolean);
+  console.log("Final results count:", finalResults.length);
 
   return {
     query,
     geo,
-    results: detailed.filter(Boolean),
+    results: finalResults,
   };
 }
 
 app.get("/health", (req, res) => res.send("ok"));
+
+app.get("/debug/env", (req, res) => {
+  res.json({
+    googleKeyLoaded: !!GOOGLE_API_KEY,
+    hunterKeyLoaded: !!HUNTER_API_KEY
+  });
+});
+
+app.get("/debug/hunter", async (req, res) => {
+  try {
+    const testDomain = req.query.domain || "hunter.io";
+    const result = await hunterDomainSearch(testDomain);
+    res.json({ ok: true, domain: testDomain, result });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
 
 app.post("/api/search", async (req, res) => {
   try {
@@ -469,7 +534,8 @@ app.post("/api/search", async (req, res) => {
       businessType,
       radiusMiles = 10,
       maxResults = 60,
-      scrapeEmails = true
+      scrapeEmails = true,
+      useHunter = true
     } = req.body;
 
     const data = await buildResults({
@@ -477,7 +543,8 @@ app.post("/api/search", async (req, res) => {
       businessType,
       radiusMiles,
       maxResults,
-      scrapeEmails
+      scrapeEmails,
+      useHunter
     });
 
     res.json({
@@ -487,7 +554,7 @@ app.post("/api/search", async (req, res) => {
       results: data.results,
     });
   } catch (e) {
-    console.error(e);
+    console.error("API /api/search error:", e);
     res.status(500).json({ error: String(e.message || e) });
   }
 });
@@ -499,7 +566,8 @@ app.post("/api/search.csv", async (req, res) => {
       businessType,
       radiusMiles = 10,
       maxResults = 60,
-      scrapeEmails = true
+      scrapeEmails = true,
+      useHunter = true
     } = req.body;
 
     const data = await buildResults({
@@ -507,7 +575,8 @@ app.post("/api/search.csv", async (req, res) => {
       businessType,
       radiusMiles,
       maxResults,
-      scrapeEmails
+      scrapeEmails,
+      useHunter
     });
 
     const headers = [
@@ -540,10 +609,9 @@ app.post("/api/search.csv", async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send("\uFEFF" + csv);
   } catch (e) {
-    console.error(e);
+    console.error("API /api/search.csv error:", e);
     res.status(500).json({ error: String(e.message || e) });
   }
 });
 
 app.listen(3000, () => console.log("Server running on http://127.0.0.1:3000"));
-
