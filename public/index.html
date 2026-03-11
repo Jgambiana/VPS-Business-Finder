@@ -167,7 +167,7 @@ function openIntakeForm(business) {
     zip: parsed.zip,
 
     website: business.website || "",
-
+useHunter: false
     notes:
 `Lead Source: VPS Business Finder
 Address: ${business.address || ""}
@@ -403,7 +403,7 @@ method:"POST",
 headers:{"Content-Type":"application/json"},
 body:JSON.stringify({location,businessType,radiusMiles,maxResults,scrapeEmails})
 });
-
+useHunter: false
 if(!res.ok){
 const err=await res.json().catch(()=>({}));
 status.textContent=err.error||"CSV export failed";
@@ -452,4 +452,5 @@ document.getElementById("downloadBtn").addEventListener("click",downloadCsv);
 
 </body>
 </html>
+
 
