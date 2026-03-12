@@ -5,75 +5,102 @@
 <title>VPS Business Finder</title>
 
 <style>
-body { font-family: Arial, sans-serif; max-width: 1200px; margin: 30px auto; padding: 0 10px; }
-label { display:block; margin-top:12px; font-weight:600; }
-input[type="text"], input[type="number"] { width:100%; padding:10px; margin-top:6px; box-sizing:border-box; }
-button { margin-top:14px; padding:10px 14px; cursor:pointer; }
-.muted { color:#666; font-size:0.9em; margin-top:10px; }
 
-.layout { display:grid; grid-template-columns: 380px 1fr; gap:16px; align-items:start; }
-
-@media (max-width:1000px){
-.layout{ grid-template-columns:1fr;}
+body {
+  font-family: Arial, sans-serif;
+  max-width: 1200px;
+  margin: 30px auto;
+  padding: 0 10px;
 }
 
-#map{
-width:100%;
-height:460px;
-border:1px solid #ddd;
-border-radius:8px;
+label {
+  display:block;
+  margin-top:12px;
+  font-weight:600;
 }
 
-table{ width:100%; border-collapse:collapse; margin-top:18px; font-size:14px;}
-th,td{ border:1px solid #ddd; padding:10px; vertical-align:top;}
-th{ text-align:left; background:#f6f6f6; position:sticky; top:0;}
-tr:hover{ background:#fafafa;}
+input[type="text"], input[type="number"] {
+  width:100%;
+  padding:10px;
+  margin-top:6px;
+  box-sizing:border-box;
+}
 
-.controls-row{ margin-top:12px;}
-.checkbox-row{ margin-top:14px; display:flex; align-items:center; gap:8px;}
+button {
+  margin-top:14px;
+  padding:10px 14px;
+  cursor:pointer;
+}
+
+.layout {
+  display:grid;
+  grid-template-columns:380px 1fr;
+  gap:16px;
+}
+
+#map {
+  width:100%;
+  height:460px;
+  border:1px solid #ddd;
+  border-radius:8px;
+}
+
+table {
+  width:100%;
+  border-collapse:collapse;
+  margin-top:18px;
+}
+
+th, td {
+  border:1px solid #ddd;
+  padding:10px;
+}
+
+th {
+  background:#f6f6f6;
+}
+
+.muted {
+  color:#666;
+  font-size:0.9em;
+  margin-top:10px;
+}
+
+/* modal */
 
 .modal-overlay{
-display:none;
-position:fixed;
-inset:0;
-background:rgba(0,0,0,0.55);
-z-index:9999;
-justify-content:center;
-align-items:center;
-padding:20px;
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.55);
+  z-index:9999;
+  justify-content:center;
+  align-items:center;
 }
 
-.modal-overlay.show{display:flex;}
+.modal-overlay.show{
+  display:flex;
+}
 
 .modal-box{
-position:relative;
-background:#fff;
-width:100%;
-max-width:900px;
-max-height:90vh;
-overflow:auto;
-border-radius:10px;
-padding:20px;
-box-sizing:border-box;
+  background:#fff;
+  max-width:900px;
+  width:100%;
+  padding:20px;
+  border-radius:10px;
+  position:relative;
 }
 
 .modal-close{
-position:absolute;
-top:10px;
-right:12px;
-border:none;
-background:transparent;
-font-size:28px;
-cursor:pointer;
-margin-top:0;
-padding:0 6px;
+  position:absolute;
+  right:10px;
+  top:10px;
+  font-size:26px;
+  cursor:pointer;
 }
 
-.meetings-iframe-container{
-min-height:700px;
-width:100%;
-}
 </style>
+
 </head>
 
 <body>
@@ -85,23 +112,18 @@ width:100%;
 <div>
 
 <label>ZIP or Location</label>
-<input id="location" type="text" placeholder="55344 or Eden Prairie, MN"/>
+<input id="location" placeholder="55344 or Eden Prairie, MN">
 
 <label>Business Type</label>
-<input id="businessType" type="text" placeholder="restaurant"/>
+<input id="businessType" placeholder="restaurant">
 
 <label>Radius (miles)</label>
-<input id="radiusMiles" type="number" value="10" min="1" max="30"/>
+<input id="radiusMiles" type="number" value="10">
 
 <label>Max Results</label>
-<input id="maxResults" type="number" value="60" min="1" max="120"/>
+<input id="maxResults" type="number" value="60">
 
-<div class="checkbox-row">
-<input id="scrapeEmails" type="checkbox" checked/>
-<label for="scrapeEmails" style="margin:0;">Scrape emails from websites</label>
-</div>
-
-<div class="controls-row">
+<div>
 <button id="searchBtn">Search</button>
 <button id="downloadBtn">Download CSV</button>
 <button id="bookMeetingBtn">Book Meeting</button>
@@ -113,225 +135,162 @@ width:100%;
 
 <div>
 <div id="map"></div>
-<div class="muted">Pins are clustered. Click a table row to focus its pin.</div>
+<div class="muted">Click a table row to zoom to the map pin</div>
 </div>
 
 </div>
 
 <div id="results"></div>
 
+
+<!-- Meeting Modal -->
+
 <div id="meetingModal" class="modal-overlay">
 <div class="modal-box">
-<button id="closeMeetingModal" class="modal-close">&times;</button>
+
+<div id="closeMeetingModal" class="modal-close">×</div>
+
 <h3>Book Meeting</h3>
-<div class="meetings-iframe-container"
-data-src="https://meetings-na2.hubspot.com/david28/meeting-form">
+
+<div
+class="meetings-iframe-container"
+data-src="https://meetings.hubspot.com/YOUR_HUBSPOT_MEETING_LINK?embed=true">
+</div>
+
 </div>
 </div>
-</div>
+
 
 <script>
 
-const apiUrl="/api/search";
-// URL of your intake form
-const INTAKE_FORM_URL = "https://quiet-recipe-ef97.jgambiana.workers.dev/";
+const apiUrl="/api/search"
 
-function parseAddressParts(address) {
-
-  const parts = (address || "").split(",").map(p => p.trim());
-
-  const city = parts[1] || "";
-  const stateZip = parts[2] || "";
-
-  const state = stateZip.split(" ")[0] || "";
-  const zip = stateZip.split(" ").slice(1).join(" ") || "";
-
-  return { city, state, zip };
-
-}
-
-function openIntakeForm(business) {
-
-  const parsed = parseAddressParts(business.address || "");
-
-  const params = new URLSearchParams({
-
-    companyName: business.name || "",
-    companyPhone: (business.phone || "").replace(/\D/g,""),
-    companyPhoneCode: "+1",
-
-    companyEmail: business.hunterEmail || business.email || "",
-
-    city: parsed.city,
-    state: parsed.state,
-    zip: parsed.zip,
-
-    website: business.website || "",
-useHunter: false
-    notes:
-`Lead Source: VPS Business Finder
-Address: ${business.address || ""}
-Rating: ${business.rating || ""}
-Reviews: ${business.reviewCount || ""}`
-
-  });
-
-  window.open(`${INTAKE_FORM_URL}/?${params.toString()}`, "_blank");
-
-}
-
-let map;
-let markers=[];
-let markerCluster;
-let infoWindow;
+let map
+let markers=[]
+let markerCluster
+let infoWindow
 
 function initMap(){
 
 map=new google.maps.Map(document.getElementById("map"),{
 center:{lat:44.9778,lng:-93.2650},
 zoom:10
-});
+})
 
-infoWindow=new google.maps.InfoWindow();
+infoWindow=new google.maps.InfoWindow()
 
 }
 
-function clearMapMarkers(){
+function clearMap(){
 
 if(markerCluster){
-markerCluster.clearMarkers();
-markerCluster=null;
+markerCluster.clearMarkers()
+markerCluster=null
 }
 
-markers.forEach(m=>m.setMap(null));
-markers=[];
+markers.forEach(m=>m.setMap(null))
+markers=[]
 
 }
 
-function plotResultsOnMap(results){
+function plotResults(results){
 
-clearMapMarkers();
+clearMap()
 
-const bounds=new google.maps.LatLngBounds();
+const bounds=new google.maps.LatLngBounds()
 
-results.forEach((r)=>{
+results.forEach(r=>{
 
-const lat=Number(r.lat);
-const lng=Number(r.lng);
-
-if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
+if(!r.lat || !r.lng) return
 
 const marker=new google.maps.Marker({
-position:{lat,lng},
-title:r.name||""
-});
+position:{lat:Number(r.lat),lng:Number(r.lng)},
+title:r.name
+})
 
 marker.addListener("click",()=>{
 
 infoWindow.setContent(`
-<div style="font-family:Arial;font-size:14px;max-width:260px;">
-<div style="font-weight:bold;margin-bottom:4px;">${escapeHtml(r.name||"")}</div>
-<div>${escapeHtml(r.contactName||"")} ${r.contactTitle?`- ${escapeHtml(r.contactTitle)}`:""}</div>
-<div>${escapeHtml(r.address||"")}</div>
-<div>${escapeHtml(r.phone||"")}</div>
-<div>Email: ${escapeHtml(r.hunterEmail||r.email||"")}</div>
-<div>Rating: ${escapeHtml(String(r.rating||""))} ${r.reviewCount?`(${escapeHtml(String(r.reviewCount))})`:""}</div>
-${r.website?`<div><a href="${r.website}" target="_blank">Website</a></div>`:""}
-${r.googleMapsUrl?`<div><a href="${r.googleMapsUrl}" target="_blank">Google Maps</a></div>`:""}
+<div>
+<b>${r.name}</b><br>
+${r.contactName || ""}<br>
+${r.phone || ""}<br>
+${r.address || ""}<br>
+${r.email || ""}
 </div>
-`);
+`)
 
-infoWindow.open({map,anchor:marker});
+infoWindow.open(map,marker)
 
-});
+})
 
-markers.push(marker);
-bounds.extend({lat,lng});
+markers.push(marker)
+bounds.extend(marker.position)
 
-});
+})
 
 if(markers.length){
-markerCluster=new markerClusterer.MarkerClusterer({map,markers});
-map.fitBounds(bounds);
-}
+
+markerCluster=new markerClusterer.MarkerClusterer({map,markers})
+map.fitBounds(bounds)
 
 }
-
-function focusMarker(index){
-
-const marker=markers[index];
-if(!marker)return;
-
-map.panTo(marker.getPosition());
-map.setZoom(15);
-google.maps.event.trigger(marker,"click");
 
 }
 
 async function runSearch(){
 
-const location=document.getElementById("location").value.trim();
-const businessType=document.getElementById("businessType").value.trim();
-const radiusMiles=Number(document.getElementById("radiusMiles").value||10);
-const maxResults=Number(document.getElementById("maxResults").value||60);
-const scrapeEmails=document.getElementById("scrapeEmails").checked;
+const location=document.getElementById("location").value.trim()
+const businessType=document.getElementById("businessType").value.trim()
+const radiusMiles=Number(document.getElementById("radiusMiles").value)
+const maxResults=Number(document.getElementById("maxResults").value)
 
-const status=document.getElementById("status");
-const resultsDiv=document.getElementById("results");
+const status=document.getElementById("status")
+const resultsDiv=document.getElementById("results")
 
-if(!location||!businessType){
-status.textContent="Please enter a location and business type.";
-return;
-}
-
-resultsDiv.innerHTML="";
-status.textContent="Searching...";
+status.textContent="Searching..."
 
 try{
 
 const res=await fetch(apiUrl,{
 method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({location,businessType,radiusMiles,maxResults,scrapeEmails})
-});
+headers:{ "Content-Type":"application/json" },
+body:JSON.stringify({
+location,
+businessType,
+radiusMiles,
+maxResults,
+scrapeEmails:true,
+useHunter:false
+})
+})
 
-const data=await res.json();
+const data=await res.json()
 
 if(!res.ok){
-status.textContent=data.error||"Search failed.";
-return;
+
+status.textContent=data.error || "Search failed"
+return
+
 }
 
-status.textContent=`Found ${data.count} results`;
+status.textContent=`Found ${data.count} results`
 
-const results=data.results||[];
+plotResults(data.results)
 
-window.currentResults=results;
-
-plotResultsOnMap(results);
-
-const rows=results.map((r,i)=>`
+const rows=data.results.map((r,i)=>`
 
 <tr data-idx="${i}">
-
-<td>${escapeHtml(r.name)}</td>
-<td>${escapeHtml(r.contactName||"")}</td>
-<td>${escapeHtml(r.contactTitle||"")}</td>
-<td>${escapeHtml(r.hunterEmail||r.email||"")}</td>
-<td>${escapeHtml(r.phone||"")}</td>
-<td>${escapeHtml(r.address||"")}</td>
-<td>${escapeHtml(String(r.rating||""))}</td>
-<td>${escapeHtml(String(r.reviewCount||""))}</td>
-
+<td>${r.name}</td>
+<td>${r.contactName || ""}</td>
+<td>${r.email || ""}</td>
+<td>${r.phone || ""}</td>
+<td>${r.address || ""}</td>
 <td>${r.website ? `<a href="${r.website}" target="_blank">Website</a>` : ""}</td>
 <td>${r.googleMapsUrl ? `<a href="${r.googleMapsUrl}" target="_blank">Map</a>` : ""}</td>
-<td><button class="prospectBtn" data-idx="${i}">Create Prospect</button></td>
-
-<td><button class="prospectBtn" data-idx="${i}">Create Prospect</button></td>
-
 </tr>
 
-`).join("");
+`).join("")
 
 resultsDiv.innerHTML=`
 
@@ -339,49 +298,28 @@ resultsDiv.innerHTML=`
 
 <thead>
 <tr>
-
 <th>Business</th>
-<th>Contact Name</th>
-<th>Title</th>
+<th>Contact</th>
 <th>Email</th>
 <th>Phone</th>
 <th>Address</th>
-<th>Rating</th>
-<th>Reviews</th>
 <th>Website</th>
 <th>Google</th>
-<th>Prospect</th>
-
 </tr>
 </thead>
 
-<tbody id="resultsBody">${rows}</tbody>
+<tbody id="resultsBody">
+${rows}
+</tbody>
 
 </table>
 
-`;
-
-document.getElementById("resultsBody").addEventListener("click", (e) => {
-
-  const tr = e.target.closest("tr");
-  if (!tr) return;
-
-  const idx = Number(tr.getAttribute("data-idx"));
-  const business = window.currentResults[idx];
-
-  if (e.target.classList.contains("prospectBtn")) {
-    openIntakeForm(business);
-    return;
-  }
-
-  focusMarker(idx);
-
-});
+`
 
 }catch(e){
 
-console.error(e);
-status.textContent="Error contacting server";
+console.error(e)
+status.textContent="Error contacting server"
 
 }
 
@@ -389,68 +327,58 @@ status.textContent="Error contacting server";
 
 async function downloadCsv(){
 
-const location=document.getElementById("location").value.trim();
-const businessType=document.getElementById("businessType").value.trim();
-const radiusMiles=Number(document.getElementById("radiusMiles").value||10);
-const maxResults=Number(document.getElementById("maxResults").value||60);
-const scrapeEmails=document.getElementById("scrapeEmails").checked;
-
-const status=document.getElementById("status");
-status.textContent="Preparing CSV...";
+const location=document.getElementById("location").value.trim()
+const businessType=document.getElementById("businessType").value.trim()
+const radiusMiles=Number(document.getElementById("radiusMiles").value)
+const maxResults=Number(document.getElementById("maxResults").value)
 
 const res=await fetch("/api/search.csv",{
 method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({location,businessType,radiusMiles,maxResults,scrapeEmails})
-});
-useHunter: false
-if(!res.ok){
-const err=await res.json().catch(()=>({}));
-status.textContent=err.error||"CSV export failed";
-return;
-}
+headers:{ "Content-Type":"application/json" },
+body:JSON.stringify({
+location,
+businessType,
+radiusMiles,
+maxResults,
+scrapeEmails:true,
+useHunter:false
+})
+})
 
-const blob=await res.blob();
-const url=URL.createObjectURL(blob);
+const blob=await res.blob()
 
-const a=document.createElement("a");
-a.href=url;
-a.download="business_results.csv";
-document.body.appendChild(a);
-a.click();
-a.remove();
+const url=URL.createObjectURL(blob)
 
-URL.revokeObjectURL(url);
+const a=document.createElement("a")
+a.href=url
+a.download="business_results.csv"
+a.click()
 
-status.textContent="CSV Downloaded";
+URL.revokeObjectURL(url)
 
 }
 
-const meetingModal=document.getElementById("meetingModal");
-const bookMeetingBtn=document.getElementById("bookMeetingBtn");
-const closeMeetingModal=document.getElementById("closeMeetingModal");
+document.getElementById("searchBtn").addEventListener("click",runSearch)
+document.getElementById("downloadBtn").addEventListener("click",downloadCsv)
 
-bookMeetingBtn.addEventListener("click",()=>{meetingModal.classList.add("show");});
-closeMeetingModal.addEventListener("click",()=>{meetingModal.classList.remove("show");});
 
-meetingModal.addEventListener("click",(e)=>{
-if(e.target===meetingModal){meetingModal.classList.remove("show");}
-});
+/* meeting modal */
 
-document.addEventListener("keydown",(e)=>{
-if(e.key==="Escape"){meetingModal.classList.remove("show");}
-});
+const meetingModal=document.getElementById("meetingModal")
 
-document.getElementById("searchBtn").addEventListener("click",runSearch);
-document.getElementById("downloadBtn").addEventListener("click",downloadCsv);
+document.getElementById("bookMeetingBtn").onclick=()=>{
+meetingModal.classList.add("show")
+}
+
+document.getElementById("closeMeetingModal").onclick=()=>{
+meetingModal.classList.remove("show")
+}
 
 </script>
 
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD3aKyqlgr8raLl2z7GHg5GpbUMOUxNz4Y&callback=initMap" async defer></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_BROWSER_KEY&callback=initMap" async defer></script>
 <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
 <script src="https://static.hsappstatic.net/MeetingsEmbed/ex/MeetingsEmbedCode.js"></script>
 
 </body>
 </html>
-
-
