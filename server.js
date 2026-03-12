@@ -49,7 +49,22 @@ async function geocodeLocation(locationText) {
   const res = await fetch(url);
   const data = await res.json();
 
-  if (!data.results || data.results.length === 0) return null;
+  console.log(
+    "Geocode response:",
+    JSON.stringify({
+      input: locationText,
+      status: data.status,
+      error_message: data.error_message || "",
+      results_count: data.results ? data.results.length : 0
+    })
+  );
+
+  if (!data.results || data.results.length === 0) {
+    throw new Error(
+      `Geocoding failed: ${data.status || "UNKNOWN"} ${data.error_message || ""}`.trim()
+    );
+  }
+
   const loc = data.results[0].geometry.location;
   return { lat: loc.lat, lng: loc.lng };
 }
@@ -406,7 +421,6 @@ async function buildResults({
   });
 
   const geo = await geocodeLocation(location);
-  if (!geo) throw new Error("Could not geocode location");
 
   const radiusMeters = Math.min(Math.round(Number(radiusMiles) * 1609.34), 50000);
   const query = `${businessType} in ${location}`;
@@ -515,6 +529,16 @@ app.get("/debug/env", (req, res) => {
     googleKeyLoaded: !!GOOGLE_API_KEY,
     hunterKeyLoaded: !!HUNTER_API_KEY
   });
+});
+
+app.get("/debug/geocode", async (req, res) => {
+  try {
+    const location = req.query.location || "55344";
+    const geo = await geocodeLocation(location);
+    res.json({ ok: true, location, geo });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
 });
 
 app.get("/debug/hunter", async (req, res) => {
