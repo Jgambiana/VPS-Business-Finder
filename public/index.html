@@ -31,25 +31,6 @@ button {
   cursor:pointer;
 }
 
-.layout {
-  display:grid;
-  grid-template-columns:380px 1fr;
-  gap:16px;
-}
-
-@media (max-width: 1000px) {
-  .layout {
-    grid-template-columns:1fr;
-  }
-}
-
-#map {
-  width:100%;
-  height:460px;
-  border:1px solid #ddd;
-  border-radius:8px;
-}
-
 table {
   width:100%;
   border-collapse:collapse;
@@ -66,10 +47,48 @@ th {
   background:#f6f6f6;
 }
 
+td button {
+  white-space: nowrap;
+}
+
 .muted {
   color:#666;
   font-size:0.9em;
   margin-top:10px;
+}
+
+.layout {
+  display:grid;
+  grid-template-columns: 380px 1fr;
+  gap:16px;
+}
+
+@media (max-width: 1000px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.results-wrap {
+  min-height: 120px;
+}
+
+.star-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.stars {
+  color: #f4b400;
+  letter-spacing: 1px;
+  font-size: 16px;
+}
+
+.review-count {
+  color: #666;
+  font-size: 13px;
 }
 
 .modal-overlay {
@@ -126,7 +145,7 @@ th {
     <input id="radiusMiles" type="number" value="10">
 
     <label>Max Results</label>
-    <input id="maxResults" type="number" value="60">
+    <input id="maxResults" type="number" value="300">
 
     <div>
       <button id="searchBtn">Search</button>
@@ -137,9 +156,10 @@ th {
     <div class="muted" id="status"></div>
   </div>
 
-  <div>
-    <div id="map"></div>
-    <div class="muted">Click a table row to zoom to the map pin</div>
+  <div class="results-wrap">
+    <div class="muted" style="margin-top:38px;">
+      Search results will show business info, reviews, website links, and intake actions.
+    </div>
   </div>
 </div>
 
@@ -152,7 +172,7 @@ th {
 
     <div
       class="meetings-iframe-container"
-      data-src="https://meetings-na2.hubspot.com/joel-gambiana?embed=true"
+      data-src="https://meetings-na2.hubspot.com/YOUR_HUBSPOT_MEETING_LINK?embed=true"
       style="min-height:700px;width:100%;">
     </div>
   </div>
@@ -160,20 +180,6 @@ th {
 
 <script>
 const apiUrl = "/api/search";
-
-let map;
-let markers = [];
-let markerCluster;
-let infoWindow;
-
-function initMap() {
-  map = new google.maps.Map(document.getElementById("map"), {
-    center: { lat: 44.9778, lng: -93.2650 },
-    zoom: 10
-  });
-
-  infoWindow = new google.maps.InfoWindow();
-}
 
 function escapeHtml(str) {
   return (str || "").replace(/[&<>"']/g, m => ({
@@ -185,63 +191,84 @@ function escapeHtml(str) {
   }[m]));
 }
 
-function clearMap() {
-  if (markerCluster) {
-    markerCluster.clearMarkers();
-    markerCluster = null;
+function parseAddressParts(address) {
+  if (!address) {
+    return { city: "", state: "", zip: "" };
   }
 
-  markers.forEach(m => m.setMap(null));
-  markers = [];
-}
+  const parts = address.split(",").map(p => p.trim());
 
-function plotResults(results) {
-  clearMap();
+  let city = "";
+  let state = "";
+  let zip = "";
 
-  const bounds = new google.maps.LatLngBounds();
-
-  results.forEach((r) => {
-    if (!r.lat || !r.lng) return;
-
-    const marker = new google.maps.Marker({
-      position: { lat: Number(r.lat), lng: Number(r.lng) },
-      title: r.name
-    });
-
-    marker.addListener("click", () => {
-      infoWindow.setContent(`
-        <div>
-          <b>${escapeHtml(r.name)}</b><br>
-          ${escapeHtml(r.contactName || "")}<br>
-          ${escapeHtml(r.phone || "")}<br>
-          ${escapeHtml(r.address || "")}<br>
-          ${escapeHtml(r.email || "")}
-        </div>
-      `);
-
-      infoWindow.open({
-        map,
-        anchor: marker
-      });
-    });
-
-    markers.push(marker);
-    bounds.extend(marker.getPosition());
-  });
-
-  if (markers.length) {
-    markerCluster = new markerClusterer.MarkerClusterer({ map, markers });
-    map.fitBounds(bounds);
+  if (parts.length >= 2) {
+    city = parts[parts.length - 2] || "";
   }
+
+  if (parts.length >= 1) {
+    const lastPart = parts[parts.length - 1] || "";
+    const match = lastPart.match(/^([A-Za-z\s]+)\s+(\d{5}(?:-\d{4})?)$/);
+
+    if (match) {
+      state = match[1].trim();
+      zip = match[2].trim();
+    } else {
+      state = lastPart.trim();
+    }
+  }
+
+  return { city, state, zip };
 }
 
-function focusMarker(index) {
-  const marker = markers[index];
-  if (!marker) return;
+function openIntakeForm(r) {
+  const url = new URL("https://quiet-recipe-ef97.jgambiana.workers.dev/");
 
-  map.panTo(marker.getPosition());
-  map.setZoom(15);
-  google.maps.event.trigger(marker, "click");
+  if (r.name) url.searchParams.set("companyName", r.name);
+
+  if (r.phone) {
+    url.searchParams.set("companyPhone", r.phone);
+    url.searchParams.set("contactPhone", r.phone);
+    url.searchParams.set("companyPhoneCode", "+1");
+    url.searchParams.set("contactPhoneCode", "+1");
+  }
+
+  if (r.email) {
+    url.searchParams.set("companyEmail", r.email);
+    url.searchParams.set("contactEmail", r.email);
+  }
+
+  if (r.website) url.searchParams.set("website", r.website);
+
+  if (r.address) {
+    url.searchParams.set("address", r.address);
+
+    const parsed = parseAddressParts(r.address);
+    if (parsed.city) url.searchParams.set("city", parsed.city);
+    if (parsed.state) url.searchParams.set("state", parsed.state);
+    if (parsed.zip) url.searchParams.set("zip", parsed.zip);
+  }
+
+  if (r.contactName) {
+    const parts = r.contactName.trim().split(/\s+/);
+    if (parts.length > 0) url.searchParams.set("firstName", parts[0]);
+    if (parts.length > 1) url.searchParams.set("lastName", parts.slice(1).join(" "));
+  }
+
+  if (r.contactTitle) url.searchParams.set("jobTitle", r.contactTitle);
+
+  url.searchParams.set("callDisposition", "Connected");
+  url.searchParams.set("notes", "Lead opened from VPS Business Finder");
+
+  window.open(url.toString(), "_blank");
+}
+
+function renderStars(rating) {
+  const value = Number(rating);
+  if (!Number.isFinite(value) || value <= 0) return "";
+
+  const full = Math.round(value);
+  return "★".repeat(full) + "☆".repeat(Math.max(0, 5 - full));
 }
 
 async function runSearch() {
@@ -284,65 +311,49 @@ async function runSearch() {
 
     status.textContent = `Found ${data.count} results`;
 
-    plotResults(data.results || []);
-
-  const rows = data.results.map((r,i)=>`
-
-<tr data-idx="${i}">
-
-<td>${r.name}</td>
-
-<td>${r.contactName || ""}</td>
-
-<td>${r.email || ""}</td>
-
-<td>${r.phone || ""}</td>
-
-<td>${r.address || ""}</td>
-
-<td>${r.website ? `<a href="${r.website}" target="_blank">Website</a>` : ""}</td>
-
-<td>${r.googleMapsUrl ? `<a href="${r.googleMapsUrl}" target="_blank">Map</a>` : ""}</td>
-
-<td>
-<button onclick='openIntakeForm(${JSON.stringify(r)})'>
-Open Intake Form
-</button>
-</td>
-
-</tr>
-
-`).join("")
+    const rows = (data.results || []).map((r) => `
+      <tr>
+        <td>${escapeHtml(r.name || "")}</td>
+        <td>${escapeHtml(r.contactName || "")}</td>
+        <td>${escapeHtml(r.email || "")}</td>
+        <td>${escapeHtml(r.phone || "")}</td>
+        <td>${escapeHtml(r.address || "")}</td>
+        <td>
+          <div class="star-rating">
+            <span class="stars">${renderStars(r.rating)}</span>
+            <span>${escapeHtml(String(r.rating || ""))}</span>
+            <span class="review-count">(${escapeHtml(String(r.reviewCount || 0))})</span>
+          </div>
+        </td>
+        <td>${r.website ? `<a href="${r.website}" target="_blank">Website</a>` : ""}</td>
+       
+        <td>
+          <button type="button" onclick='openIntakeForm(${JSON.stringify(r)})'>
+            Open Intake Form
+          </button>
+        </td>
+      </tr>
+    `).join("");
 
     resultsDiv.innerHTML = `
       <table>
         <thead>
           <tr>
-          <th>Business</th>
+<th>Business</th>
 <th>Contact</th>
 <th>Email</th>
 <th>Phone</th>
 <th>Address</th>
+<th>Reviews</th>
 <th>Website</th>
-<th>Google</th>
 <th>Intake</th>
           </tr>
         </thead>
-        <tbody id="resultsBody">
+        <tbody>
           ${rows}
         </tbody>
       </table>
     `;
-
-    const tbody = document.getElementById("resultsBody");
-    if (tbody) {
-      tbody.addEventListener("click", (e) => {
-        const tr = e.target.closest("tr");
-        if (!tr) return;
-        const idx = Number(tr.getAttribute("data-idx"));
-        focusMarker(idx);
-      });
-    }
 
   } catch (e) {
     console.error(e);
@@ -425,88 +436,9 @@ document.addEventListener("keydown", (e) => {
     meetingModal.classList.remove("show");
   }
 });
-function parseAddressParts(address) {
-  if (!address) {
-    return { city: "", state: "", zip: "" };
-  }
-
-  // Example expected format:
-  // "123 Main St, Minneapolis, MN 55401"
-  const parts = address.split(",").map(p => p.trim());
-
-  let city = "";
-  let state = "";
-  let zip = "";
-
-  if (parts.length >= 2) {
-    city = parts[parts.length - 2] || "";
-  }
-
-  if (parts.length >= 1) {
-    const lastPart = parts[parts.length - 1] || "";
-
-    // Handles "MN 55401" or "Minnesota 55401"
-    const match = lastPart.match(/^([A-Za-z\s]+)\s+(\d{5}(?:-\d{4})?)$/);
-
-    if (match) {
-      state = match[1].trim();
-      zip = match[2].trim();
-    } else {
-      state = lastPart.trim();
-    }
-  }
-
-  return { city, state, zip };
-}
-
-function openIntakeForm(r) {
-  const url = new URL("https://quiet-recipe-ef97.jgambiana.workers.dev/");
-
-  if (r.name) url.searchParams.set("companyName", r.name);
-
-  if (r.phone) {
-    url.searchParams.set("companyPhone", r.phone);
-    url.searchParams.set("contactPhone", r.phone);
-    url.searchParams.set("companyPhoneCode", "+1");
-    url.searchParams.set("contactPhoneCode", "+1");
-  }
-
-  if (r.email) {
-    url.searchParams.set("companyEmail", r.email);
-    url.searchParams.set("contactEmail", r.email);
-  }
-
-  if (r.website) url.searchParams.set("website", r.website);
-
-  if (r.address) {
-    url.searchParams.set("address", r.address);
-
-    const parsed = parseAddressParts(r.address);
-
-    if (parsed.city) url.searchParams.set("city", parsed.city);
-    if (parsed.state) url.searchParams.set("state", parsed.state);
-    if (parsed.zip) url.searchParams.set("zip", parsed.zip);
-  }
-
-  if (r.contactName) {
-    const parts = r.contactName.trim().split(/\s+/);
-    if (parts.length > 0) url.searchParams.set("firstName", parts[0]);
-    if (parts.length > 1) url.searchParams.set("lastName", parts.slice(1).join(" "));
-  }
-
-  if (r.contactTitle) url.searchParams.set("jobTitle", r.contactTitle);
-
-  url.searchParams.set("callDisposition", "Connected");
-  url.searchParams.set("notes", "Lead opened from VPS Business Finder");
-
-  window.open(url.toString(), "_blank");
-}
 </script>
 
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCDcAQG2iVH6sDyZ6BMyrZh-5CrUeHtD4M&callback=initMap" async defer></script>
-<script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
 <script src="https://static.hsappstatic.net/MeetingsEmbed/ex/MeetingsEmbedCode.js"></script>
 
 </body>
 </html>
-
