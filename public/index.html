@@ -296,6 +296,8 @@ async function runSearch() {
         <td>${r.website ? `<a href="${r.website}" target="_blank">Website</a>` : ""}</td>
         <td>${r.googleMapsUrl ? `<a href="${r.googleMapsUrl}" target="_blank">Map</a>` : ""}</td>
       </tr>
+      <th>Intake</th>
+      <td><button onclick='openIntakeForm(${JSON.stringify(r)})'>Open Intake Form</button></td>
     `).join("");
 
     resultsDiv.innerHTML = `
@@ -408,6 +410,38 @@ document.addEventListener("keydown", (e) => {
     meetingModal.classList.remove("show");
   }
 });
+function openIntakeForm(r) {
+  const url = new URL("https://quiet-recipe-ef97.jgambiana.workers.dev/");
+
+  if (r.name) url.searchParams.set("companyName", r.name);
+  if (r.phone) {
+    url.searchParams.set("companyPhone", r.phone);
+    url.searchParams.set("contactPhone", r.phone);
+    url.searchParams.set("companyPhoneCode", "+1");
+    url.searchParams.set("contactPhoneCode", "+1");
+  }
+
+  if (r.email) {
+    url.searchParams.set("companyEmail", r.email);
+    url.searchParams.set("contactEmail", r.email);
+  }
+
+  if (r.website) url.searchParams.set("website", r.website);
+  if (r.address) url.searchParams.set("address", r.address);
+
+  if (r.contactName) {
+    const parts = r.contactName.trim().split(/\s+/);
+    if (parts.length > 0) url.searchParams.set("firstName", parts[0]);
+    if (parts.length > 1) url.searchParams.set("lastName", parts.slice(1).join(" "));
+  }
+
+  if (r.contactTitle) url.searchParams.set("jobTitle", r.contactTitle);
+
+  url.searchParams.set("callDisposition", "Connected");
+  url.searchParams.set("notes", "Lead opened from VPS Business Finder");
+
+  window.open(url.toString(), "_blank");
+}  
 </script>
 
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCDcAQG2iVH6sDyZ6BMyrZh-5CrUeHtD4M&callback=initMap" async defer></script>
