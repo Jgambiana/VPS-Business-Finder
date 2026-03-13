@@ -295,9 +295,7 @@ async function runSearch() {
         <td>${escapeHtml(r.address || "")}</td>
         <td>${r.website ? `<a href="${r.website}" target="_blank">Website</a>` : ""}</td>
         <td>${r.googleMapsUrl ? `<a href="${r.googleMapsUrl}" target="_blank">Map</a>` : ""}</td>
-      </tr>
-      <th>Intake</th>
-      <td><button onclick='openIntakeForm(${JSON.stringify(r)})'>Open Intake Form</button></td>
+      </tr><th>Intake</th><td><button onclick='openIntakeForm(${JSON.stringify(r)})'>Open Intake Form</button></td>
     `).join("");
 
     resultsDiv.innerHTML = `
