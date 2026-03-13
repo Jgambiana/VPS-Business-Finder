@@ -286,17 +286,33 @@ async function runSearch() {
 
     plotResults(data.results || []);
 
-    const rows = (data.results || []).map((r, i) => `
-      <tr data-idx="${i}">
-        <td>${escapeHtml(r.name)}</td>
-        <td>${escapeHtml(r.contactName || "")}</td>
-        <td>${escapeHtml(r.email || "")}</td>
-        <td>${escapeHtml(r.phone || "")}</td>
-        <td>${escapeHtml(r.address || "")}</td>
-        <td>${r.website ? `<a href="${r.website}" target="_blank">Website</a>` : ""}</td>
-        <td>${r.googleMapsUrl ? `<a href="${r.googleMapsUrl}" target="_blank">Map</a>` : ""}</td>
-      </tr><th>Intake</th><td><button onclick='openIntakeForm(${JSON.stringify(r)})'>Open Intake Form</button></td>
-    `).join("");
+  const rows = data.results.map((r,i)=>`
+
+<tr data-idx="${i}">
+
+<td>${r.name}</td>
+
+<td>${r.contactName || ""}</td>
+
+<td>${r.email || ""}</td>
+
+<td>${r.phone || ""}</td>
+
+<td>${r.address || ""}</td>
+
+<td>${r.website ? `<a href="${r.website}" target="_blank">Website</a>` : ""}</td>
+
+<td>${r.googleMapsUrl ? `<a href="${r.googleMapsUrl}" target="_blank">Map</a>` : ""}</td>
+
+<td>
+<button onclick='openIntakeForm(${JSON.stringify(r)})'>
+Open Intake Form
+</button>
+</td>
+
+</tr>
+
+`).join("")
 
     resultsDiv.innerHTML = `
       <table>
@@ -408,10 +424,45 @@ document.addEventListener("keydown", (e) => {
     meetingModal.classList.remove("show");
   }
 });
+function parseAddressParts(address) {
+  if (!address) {
+    return { city: "", state: "", zip: "" };
+  }
+
+  // Example expected format:
+  // "123 Main St, Minneapolis, MN 55401"
+  const parts = address.split(",").map(p => p.trim());
+
+  let city = "";
+  let state = "";
+  let zip = "";
+
+  if (parts.length >= 2) {
+    city = parts[parts.length - 2] || "";
+  }
+
+  if (parts.length >= 1) {
+    const lastPart = parts[parts.length - 1] || "";
+
+    // Handles "MN 55401" or "Minnesota 55401"
+    const match = lastPart.match(/^([A-Za-z\s]+)\s+(\d{5}(?:-\d{4})?)$/);
+
+    if (match) {
+      state = match[1].trim();
+      zip = match[2].trim();
+    } else {
+      state = lastPart.trim();
+    }
+  }
+
+  return { city, state, zip };
+}
+
 function openIntakeForm(r) {
   const url = new URL("https://quiet-recipe-ef97.jgambiana.workers.dev/");
 
   if (r.name) url.searchParams.set("companyName", r.name);
+
   if (r.phone) {
     url.searchParams.set("companyPhone", r.phone);
     url.searchParams.set("contactPhone", r.phone);
@@ -425,7 +476,16 @@ function openIntakeForm(r) {
   }
 
   if (r.website) url.searchParams.set("website", r.website);
-  if (r.address) url.searchParams.set("address", r.address);
+
+  if (r.address) {
+    url.searchParams.set("address", r.address);
+
+    const parsed = parseAddressParts(r.address);
+
+    if (parsed.city) url.searchParams.set("city", parsed.city);
+    if (parsed.state) url.searchParams.set("state", parsed.state);
+    if (parsed.zip) url.searchParams.set("zip", parsed.zip);
+  }
 
   if (r.contactName) {
     const parts = r.contactName.trim().split(/\s+/);
@@ -439,7 +499,7 @@ function openIntakeForm(r) {
   url.searchParams.set("notes", "Lead opened from VPS Business Finder");
 
   window.open(url.toString(), "_blank");
-}  
+}
 </script>
 
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCDcAQG2iVH6sDyZ6BMyrZh-5CrUeHtD4M&callback=initMap" async defer></script>
