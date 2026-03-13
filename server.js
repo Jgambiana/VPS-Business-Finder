@@ -38,6 +38,16 @@ function toCsv(rows, headers) {
   return [headerLine, ...lines].join("\r\n");
 }
 
+function metersToLatDegrees(meters) {
+  return meters / 111320;
+}
+
+function metersToLngDegrees(meters, lat) {
+  const cosLat = Math.cos((lat * Math.PI) / 180);
+  const safeCos = Math.max(cosLat, 0.0001);
+  return meters / (111320 * safeCos);
+}
+
 async function geocodeLocation(locationText) {
   const url =
     "https://maps.googleapis.com/maps/api/geocode/json?" +
@@ -69,7 +79,13 @@ async function geocodeLocation(locationText) {
   return { lat: loc.lat, lng: loc.lng };
 }
 
-async function placesTextSearchPaged({ query, lat, lng, radiusMeters, maxResults = 60 }) {
+async function placesTextSearchPaged({
+  query,
+  lat,
+  lng,
+  radiusMeters,
+  maxResults = 60
+}) {
   let all = [];
   let pageToken = null;
 
@@ -105,6 +121,97 @@ async function placesTextSearchPaged({ query, lat, lng, radiusMeters, maxResults
   }
 
   return all.slice(0, maxResults);
+}
+
+function buildGridPoints(centerLat, centerLng, radiusMeters, gridSize) {
+  // gridSize 1 => just center
+  // gridSize 3 => 9 points
+  // gridSize 5 => 25 points
+  if (gridSize <= 1) {
+    return [{ lat: centerLat, lng: centerLng }];
+  }
+
+  const points = [];
+  const diameterMeters = radiusMeters * 2;
+  const stepMeters = diameterMeters / (gridSize - 1);
+
+  for (let row = 0; row < gridSize; row++) {
+    for (let col = 0; col < gridSize; col++) {
+      const offsetNorthMeters = radiusMeters - row * stepMeters;
+      const offsetEastMeters = -radiusMeters + col * stepMeters;
+
+      const lat = centerLat + metersToLatDegrees(offsetNorthMeters);
+      const lng = centerLng + metersToLngDegrees(offsetEastMeters, centerLat);
+
+      points.push({ lat, lng });
+    }
+  }
+
+  return points;
+}
+
+async function scanGridPlaces({
+  query,
+  centerLat,
+  centerLng,
+  radiusMeters,
+  targetResults = 300
+}) {
+  let gridSize = 1;
+
+  if (targetResults > 60) gridSize = 3;
+  if (targetResults > 300) gridSize = 5;
+
+  const gridPoints = buildGridPoints(centerLat, centerLng, radiusMeters, gridSize);
+
+  // Smaller per-cell radius reduces overlap and improves coverage.
+  const perCellRadius = Math.max(
+    1500,
+    Math.min(25000, Math.round(radiusMeters / Math.max(gridSize - 1, 1)))
+  );
+
+  console.log("Grid scan config:", {
+    gridSize,
+    gridPoints: gridPoints.length,
+    perCellRadius,
+    targetResults
+  });
+
+  const allPlaces = [];
+  for (let i = 0; i < gridPoints.length; i++) {
+    const point = gridPoints[i];
+    console.log(`Grid search ${i + 1}/${gridPoints.length}`, point);
+
+    try {
+      const cellPlaces = await placesTextSearchPaged({
+        query,
+        lat: point.lat,
+        lng: point.lng,
+        radiusMeters: perCellRadius,
+        maxResults: 60
+      });
+
+      allPlaces.push(...cellPlaces);
+    } catch (err) {
+      console.error("Grid cell search failed:", i + 1, err.message || err);
+    }
+
+    // Small pause between grid cell searches to be polite
+    await sleep(250);
+  }
+
+  const unique = [];
+  const seen = new Set();
+
+  for (const p of allPlaces) {
+    const key = p.place_id || `${p.name}|${p.formatted_address}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(p);
+    }
+  }
+
+  return unique.slice(0, targetResults);
 }
 
 async function placeDetails(placeId) {
@@ -404,9 +511,9 @@ async function buildResults({
   location,
   businessType,
   radiusMiles = 10,
-  maxResults = 60,
+  maxResults = 300,
   scrapeEmails = true,
-  useHunter = true
+  useHunter = false
 }) {
   if (!GOOGLE_API_KEY) throw new Error("Missing GOOGLE_API_KEY on server");
   if (!location || !businessType) throw new Error("location and businessType are required");
@@ -425,30 +532,20 @@ async function buildResults({
   const radiusMeters = Math.min(Math.round(Number(radiusMiles) * 1609.34), 50000);
   const query = `${businessType} in ${location}`;
 
-  const places = await placesTextSearchPaged({
+  // Safety cap to avoid accidental huge API bills
+  const cappedMaxResults = Math.min(Number(maxResults) || 300, 1500);
+
+  const places = await scanGridPlaces({
     query,
-    lat: geo.lat,
-    lng: geo.lng,
+    centerLat: geo.lat,
+    centerLng: geo.lng,
     radiusMeters,
-    maxResults: Math.min(Number(maxResults) || 60, 120),
+    targetResults: cappedMaxResults
   });
 
-  console.log("Places returned:", places.length);
+  console.log("Grid places returned:", places.length);
 
-  const uniquePlaces = [];
-  const seen = new Set();
-
-  for (const p of places) {
-    const key = p.place_id || `${p.name}|${p.formatted_address}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniquePlaces.push(p);
-    }
-  }
-
-  console.log("Unique places:", uniquePlaces.length);
-
-  const detailed = await mapLimit(uniquePlaces, 4, async (p) => {
+  const detailed = await mapLimit(places, 4, async (p) => {
     try {
       const details = await placeDetails(p.place_id);
       const r = details.result;
@@ -557,9 +654,9 @@ app.post("/api/search", async (req, res) => {
       location,
       businessType,
       radiusMiles = 10,
-      maxResults = 60,
+      maxResults = 300,
       scrapeEmails = true,
-      useHunter = true
+      useHunter = false
     } = req.body;
 
     const data = await buildResults({
@@ -589,9 +686,9 @@ app.post("/api/search.csv", async (req, res) => {
       location,
       businessType,
       radiusMiles = 10,
-      maxResults = 60,
+      maxResults = 300,
       scrapeEmails = true,
-      useHunter = true
+      useHunter = false
     } = req.body;
 
     const data = await buildResults({
