@@ -1,130 +1,102 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8" />
+<meta charset="utf-8"/>
 <title>VPS Business Finder</title>
 
 <style>
-body {
-  font-family: Arial, sans-serif;
-  max-width: 1200px;
-  margin: 30px auto;
-  padding: 0 10px;
+body{
+  font-family:Arial,sans-serif;
+  max-width:1200px;
+  margin:30px auto;
+  padding:0 10px;
 }
 
-label {
+label{
   display:block;
   margin-top:12px;
   font-weight:600;
 }
 
-input[type="text"], input[type="number"] {
+input{
   width:100%;
   padding:10px;
   margin-top:6px;
   box-sizing:border-box;
 }
 
-button {
+button{
   margin-top:14px;
   padding:10px 14px;
   cursor:pointer;
 }
 
-table {
+.layout{
+  display:grid;
+  grid-template-columns:380px 1fr;
+  gap:16px;
+}
+
+#map{
+  width:100%;
+  height:460px;
+  border:1px solid #ddd;
+  border-radius:8px;
+}
+
+table{
   width:100%;
   border-collapse:collapse;
   margin-top:18px;
 }
 
-th, td {
+th,td{
   border:1px solid #ddd;
   padding:10px;
   vertical-align:top;
 }
 
-th {
+th{
   background:#f6f6f6;
 }
 
-td button {
-  white-space: nowrap;
-}
-
-.muted {
+.muted{
   color:#666;
   font-size:0.9em;
   margin-top:10px;
 }
 
-.layout {
-  display:grid;
-  grid-template-columns: 380px 1fr;
-  gap:16px;
+.intakeBtn{
+  padding:6px 10px;
+  font-size:13px;
+  white-space:nowrap;
 }
 
-@media (max-width: 1000px) {
-  .layout {
-    grid-template-columns: 1fr;
+.score-badge{
+  display:inline-block;
+  min-width:48px;
+  text-align:center;
+  padding:6px 10px;
+  border-radius:999px;
+  font-weight:700;
+  color:#fff;
+}
+
+.score-high{ background:#15803d; }
+.score-mid{ background:#b45309; }
+.score-low{ background:#b91c1c; }
+
+.score-reason{
+  display:block;
+  margin-top:4px;
+  color:#666;
+  font-size:12px;
+}
+
+@media (max-width: 1000px){
+  .layout{
+    grid-template-columns:1fr;
   }
-}
-
-.results-wrap {
-  min-height: 120px;
-}
-
-.star-rating {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.stars {
-  color: #f4b400;
-  letter-spacing: 1px;
-  font-size: 16px;
-}
-
-.review-count {
-  color: #666;
-  font-size: 13px;
-}
-
-.modal-overlay {
-  display:none;
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,0.55);
-  z-index:9999;
-  justify-content:center;
-  align-items:center;
-  padding:20px;
-}
-
-.modal-overlay.show {
-  display:flex;
-}
-
-.modal-box {
-  background:#fff;
-  max-width:900px;
-  width:100%;
-  max-height:90vh;
-  overflow:auto;
-  padding:20px;
-  border-radius:10px;
-  position:relative;
-}
-
-.modal-close {
-  position:absolute;
-  right:10px;
-  top:10px;
-  font-size:26px;
-  cursor:pointer;
-  background:none;
-  border:none;
 }
 </style>
 </head>
@@ -142,303 +114,384 @@ td button {
     <input id="businessType" placeholder="restaurant">
 
     <label>Radius (miles)</label>
-    <input id="radiusMiles" type="number" value="10">
+    <input id="radiusMiles" value="10">
 
     <label>Max Results</label>
-    <input id="maxResults" type="number" value="300">
+    <input id="maxResults" value="100">
 
-    <div>
-      <button id="searchBtn">Search</button>
-      <button id="downloadBtn">Download CSV</button>
-      <button id="bookMeetingBtn">Book Meeting</button>
-    </div>
+    <button id="searchBtn">Search</button>
+    <button id="downloadBtn">Download CSV</button>
 
-    <div class="muted" id="status"></div>
+    <div id="status" class="muted"></div>
   </div>
 
-  <div class="results-wrap">
-    <div class="muted" style="margin-top:38px;">
-      Search results will show business info, reviews, website links, and intake actions.
-    </div>
+  <div>
+    <div id="map"></div>
+    <div class="muted">Click a table row to zoom to the map pin</div>
   </div>
 </div>
 
 <div id="results"></div>
 
-<div id="meetingModal" class="modal-overlay">
-  <div class="modal-box">
-    <button id="closeMeetingModal" class="modal-close">&times;</button>
-    <h3>Book Meeting</h3>
-
-    <div
-      class="meetings-iframe-container"
-      data-src="https://meetings-na2.hubspot.com/YOUR_HUBSPOT_MEETING_LINK?embed=true"
-      style="min-height:700px;width:100%;">
-    </div>
-  </div>
-</div>
-
 <script>
-const apiUrl = "/api/search";
+const apiUrl="/api/search";
 
-function escapeHtml(str) {
-  return (str || "").replace(/[&<>"']/g, m => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
+let map;
+let markers=[];
+let infoWindow;
+
+function initMap(){
+  map=new google.maps.Map(document.getElementById("map"),{
+    center:{lat:44.9778,lng:-93.2650},
+    zoom:10
+  });
+  infoWindow=new google.maps.InfoWindow();
+}
+
+function clearMap(){
+  markers.forEach(m=>m.setMap(null));
+  markers=[];
+}
+
+function plotResults(results){
+  clearMap();
+
+  const bounds=new google.maps.LatLngBounds();
+
+  results.forEach((r)=>{
+    if(!r.lat || !r.lng) return;
+
+    const marker=new google.maps.Marker({
+      position:{lat:Number(r.lat),lng:Number(r.lng)},
+      map,
+      title:r.name
+    });
+
+    marker.addListener("click",()=>{
+      infoWindow.setContent(`
+        <b>${escapeHtml(r.name || "")}</b><br>
+        ${escapeHtml(r.phone || "")}<br>
+        ${escapeHtml(r.address || "")}
+      `);
+      infoWindow.open(map,marker);
+    });
+
+    markers.push(marker);
+    bounds.extend(marker.position);
+  });
+
+  if(markers.length){
+    map.fitBounds(bounds);
+  }
+}
+
+function focusMarker(index){
+  const marker=markers[index];
+  if(!marker) return;
+  map.panTo(marker.getPosition());
+  map.setZoom(15);
+  google.maps.event.trigger(marker,"click");
+}
+
+function escapeHtml(str){
+  return (str || "").replace(/[&<>"']/g,m=>({
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#039;"
   }[m]));
 }
 
-function parseAddressParts(address) {
-  if (!address) {
-    return { city: "", state: "", zip: "" };
+function stars(rating){
+  const value=Number(rating);
+  if(!value) return "";
+  const rounded=Math.round(value);
+  return "⭐".repeat(rounded) + ` ${value}`;
+}
+
+function scoreLead(r){
+  let score=50;
+  const reasons=[];
+
+  const rating=Number(r.rating || 0);
+  const reviews=Number(r.reviewCount || 0);
+  const hasWebsite=!!r.website;
+  const hasEmail=!!r.email;
+  const hasContact=!!r.contactName;
+  const name=(r.name || "").toLowerCase();
+
+  if(hasWebsite){
+    score += 10;
+    reasons.push("website");
+  }else{
+    score -= 15;
+    reasons.push("no website");
   }
 
-  const parts = address.split(",").map(p => p.trim());
-
-  let city = "";
-  let state = "";
-  let zip = "";
-
-  if (parts.length >= 2) {
-    city = parts[parts.length - 2] || "";
+  if(hasEmail){
+    score += 15;
+    reasons.push("email found");
+  }else{
+    score -= 10;
+    reasons.push("no email");
   }
 
-  if (parts.length >= 1) {
-    const lastPart = parts[parts.length - 1] || "";
-    const match = lastPart.match(/^([A-Za-z\s]+)\s+(\d{5}(?:-\d{4})?)$/);
+  if(hasContact){
+    score += 10;
+    reasons.push("contact name");
+  }
 
-    if (match) {
-      state = match[1].trim();
-      zip = match[2].trim();
-    } else {
-      state = lastPart.trim();
+  if(reviews >= 200){
+    score += 15;
+    reasons.push("many reviews");
+  }else if(reviews >= 50){
+    score += 8;
+    reasons.push("solid reviews");
+  }else if(reviews < 10){
+    score -= 8;
+    reasons.push("few reviews");
+  }
+
+  if(rating >= 4.5){
+    score += 10;
+    reasons.push("strong rating");
+  }else if(rating >= 4.0){
+    score += 5;
+  }else if(rating > 0 && rating < 3.8){
+    score -= 12;
+    reasons.push("weak rating");
+  }
+
+  if(name.includes("llc") || name.includes("inc") || name.includes("services") || name.includes("group")){
+    score += 4;
+  }
+
+  if(name.includes("mcdonald") || name.includes("subway") || name.includes("starbucks") || name.includes("target") || name.includes("walmart")){
+    score -= 20;
+    reasons.push("likely chain");
+  }
+
+  score=Math.max(1,Math.min(99,score));
+
+  let level="low";
+  if(score >= 75) level="high";
+  else if(score >= 50) level="mid";
+
+  return {
+    score,
+    level,
+    reason: reasons.slice(0,3).join(", ")
+  };
+}
+
+function parseAddressParts(address){
+  if(!address) return { city:"", state:"", zip:"" };
+
+  const parts=address.split(",").map(p=>p.trim());
+  let city="";
+  let state="";
+  let zip="";
+
+  if(parts.length >= 2){
+    city=parts[parts.length - 2] || "";
+  }
+
+  if(parts.length >= 1){
+    const lastPart=parts[parts.length - 1] || "";
+    const match=lastPart.match(/^([A-Za-z\s]+)\s+(\d{5}(?:-\d{4})?)$/);
+
+    if(match){
+      state=match[1].trim();
+      zip=match[2].trim();
+    }else{
+      state=lastPart.trim();
     }
   }
 
   return { city, state, zip };
 }
 
-function openIntakeForm(r) {
-  const url = new URL("https://quiet-recipe-ef97.jgambiana.workers.dev/");
+function openIntakeForm(r){
+  const url=new URL("https://quiet-recipe-ef97.jgambiana.workers.dev/");
 
-  if (r.name) url.searchParams.set("companyName", r.name);
+  if(r.name) url.searchParams.set("companyName",r.name);
 
-  if (r.phone) {
-    url.searchParams.set("companyPhone", r.phone);
-    url.searchParams.set("contactPhone", r.phone);
-    url.searchParams.set("companyPhoneCode", "+1");
-    url.searchParams.set("contactPhoneCode", "+1");
+  if(r.phone){
+    url.searchParams.set("companyPhone",r.phone);
+    url.searchParams.set("contactPhone",r.phone);
+    url.searchParams.set("companyPhoneCode","+1");
+    url.searchParams.set("contactPhoneCode","+1");
   }
 
-  if (r.email) {
-    url.searchParams.set("companyEmail", r.email);
-    url.searchParams.set("contactEmail", r.email);
+  if(r.email){
+    url.searchParams.set("companyEmail",r.email);
+    url.searchParams.set("contactEmail",r.email);
   }
 
-  if (r.website) url.searchParams.set("website", r.website);
+  if(r.website) url.searchParams.set("website",r.website);
 
-  if (r.address) {
-    url.searchParams.set("address", r.address);
-
-    const parsed = parseAddressParts(r.address);
-    if (parsed.city) url.searchParams.set("city", parsed.city);
-    if (parsed.state) url.searchParams.set("state", parsed.state);
-    if (parsed.zip) url.searchParams.set("zip", parsed.zip);
+  if(r.address){
+    url.searchParams.set("address",r.address);
+    const parsed=parseAddressParts(r.address);
+    if(parsed.city) url.searchParams.set("city",parsed.city);
+    if(parsed.state) url.searchParams.set("state",parsed.state);
+    if(parsed.zip) url.searchParams.set("zip",parsed.zip);
   }
 
-  if (r.contactName) {
-    const parts = r.contactName.trim().split(/\s+/);
-    if (parts.length > 0) url.searchParams.set("firstName", parts[0]);
-    if (parts.length > 1) url.searchParams.set("lastName", parts.slice(1).join(" "));
+  if(r.contactName){
+    const parts=r.contactName.trim().split(/\s+/);
+    if(parts.length > 0) url.searchParams.set("firstName",parts[0]);
+    if(parts.length > 1) url.searchParams.set("lastName",parts.slice(1).join(" "));
   }
 
-  if (r.contactTitle) url.searchParams.set("jobTitle", r.contactTitle);
+  if(r.contactTitle) url.searchParams.set("jobTitle",r.contactTitle);
 
-  url.searchParams.set("callDisposition", "Connected");
-  url.searchParams.set("notes", "Lead opened from VPS Business Finder");
+  url.searchParams.set("callDisposition","Connected");
+  url.searchParams.set("notes","Lead opened from VPS Business Finder");
 
-  window.open(url.toString(), "_blank");
+  window.open(url.toString(),"_blank");
 }
 
-function renderStars(rating) {
-  const value = Number(rating);
-  if (!Number.isFinite(value) || value <= 0) return "";
+async function runSearch(){
+  const location=document.getElementById("location").value.trim();
+  const businessType=document.getElementById("businessType").value.trim();
+  const radiusMiles=Number(document.getElementById("radiusMiles").value);
+  const maxResults=Number(document.getElementById("maxResults").value);
 
-  const full = Math.round(value);
-  return "★".repeat(full) + "☆".repeat(Math.max(0, 5 - full));
-}
+  const status=document.getElementById("status");
+  const resultsDiv=document.getElementById("results");
 
-async function runSearch() {
-  const location = document.getElementById("location").value.trim();
-  const businessType = document.getElementById("businessType").value.trim();
-  const radiusMiles = Number(document.getElementById("radiusMiles").value);
-  const maxResults = Number(document.getElementById("maxResults").value);
+  status.textContent="Searching...";
+  resultsDiv.innerHTML="";
 
-  const status = document.getElementById("status");
-  const resultsDiv = document.getElementById("results");
-
-  status.textContent = "Searching...";
-  resultsDiv.innerHTML = "";
-
-  try {
-    const res = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  try{
+    const res=await fetch(apiUrl,{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({
         location,
         businessType,
         radiusMiles,
         maxResults,
-        scrapeEmails: true,
-        useHunter: false
+        scrapeEmails:true,
+        useHunter:false
       })
     });
 
-    let data = {};
-    try {
-      data = await res.json();
-    } catch (_) {
-      data = {};
+    let data={};
+    try{
+      data=await res.json();
+    }catch(_){
+      data={};
     }
 
-    if (!res.ok) {
-      status.textContent = data.error || `Search failed (${res.status})`;
+    if(!res.ok){
+      status.textContent=data.error || `Search failed (${res.status})`;
       return;
     }
 
-    status.textContent = `Found ${data.count} results`;
+    status.textContent=`Found ${data.count} results`;
+    plotResults(data.results || []);
 
-    const rows = (data.results || []).map((r) => `
-      <tr>
-        <td>${escapeHtml(r.name || "")}</td>
-        <td>${escapeHtml(r.contactName || "")}</td>
-        <td>${escapeHtml(r.email || "")}</td>
-        <td>${escapeHtml(r.phone || "")}</td>
-        <td>${escapeHtml(r.address || "")}</td>
-        <td>
-          <div class="star-rating">
-            <span class="stars">${renderStars(r.rating)}</span>
-            <span>${escapeHtml(String(r.rating || ""))}</span>
-            <span class="review-count">(${escapeHtml(String(r.reviewCount || 0))})</span>
-          </div>
-        </td>
-        <td>${r.website ? `<a href="${r.website}" target="_blank">Website</a>` : ""}</td>
-       
-        <td>
-          <button type="button" onclick='openIntakeForm(${JSON.stringify(r)})'>
-            Open Intake Form
-          </button>
-        </td>
-      </tr>
-    `).join("");
+    const rows=(data.results || []).map((r,i)=>{
+      const lead=scoreLead(r);
+      const intakePayload=JSON.stringify(r).replace(/'/g,"&#39;");
 
-    resultsDiv.innerHTML = `
+      return `
+        <tr data-idx="${i}">
+          <td>${escapeHtml(r.name || "")}</td>
+          <td>
+            <span class="score-badge score-${lead.level}">${lead.score}</span>
+            <span class="score-reason">${escapeHtml(lead.reason)}</span>
+          </td>
+          <td>${escapeHtml(r.contactName || "")}</td>
+          <td>${escapeHtml(r.email || "")}</td>
+          <td>${escapeHtml(r.phone || "")}</td>
+          <td>${escapeHtml(r.address || "")}</td>
+          <td>${stars(r.rating)} <span class="muted">(${escapeHtml(String(r.reviewCount || 0))})</span></td>
+          <td>${r.website ? `<a href="${r.website}" target="_blank" onclick="event.stopPropagation()">Website</a>` : ""}</td>
+          <td>
+            <button class="intakeBtn" type="button" onclick='event.stopPropagation(); openIntakeForm(${intakePayload})'>
+              Open Intake
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    resultsDiv.innerHTML=`
       <table>
         <thead>
           <tr>
-<th>Business</th>
-<th>Contact</th>
-<th>Email</th>
-<th>Phone</th>
-<th>Address</th>
-<th>Reviews</th>
-<th>Website</th>
-<th>Intake</th>
+            <th>Business</th>
+            <th>Lead Score</th>
+            <th>Contact</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Address</th>
+            <th>Reviews</th>
+            <th>Website</th>
+            <th>Intake</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="resultsBody">
           ${rows}
         </tbody>
       </table>
     `;
 
-  } catch (e) {
-    console.error(e);
-    status.textContent = "Error contacting server: " + (e.message || "unknown error");
-  }
-}
-
-async function downloadCsv() {
-  const location = document.getElementById("location").value.trim();
-  const businessType = document.getElementById("businessType").value.trim();
-  const radiusMiles = Number(document.getElementById("radiusMiles").value);
-  const maxResults = Number(document.getElementById("maxResults").value);
-
-  const status = document.getElementById("status");
-
-  try {
-    const res = await fetch("/api/search.csv", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location,
-        businessType,
-        radiusMiles,
-        maxResults,
-        scrapeEmails: true,
-        useHunter: false
-      })
-    });
-
-    if (!res.ok) {
-      let err = {};
-      try {
-        err = await res.json();
-      } catch (_) {
-        err = {};
-      }
-      status.textContent = err.error || "CSV export failed";
-      return;
+    const tbody=document.getElementById("resultsBody");
+    if(tbody){
+      tbody.addEventListener("click",(e)=>{
+        const tr=e.target.closest("tr");
+        if(!tr) return;
+        const idx=Number(tr.getAttribute("data-idx"));
+        focusMarker(idx);
+      });
     }
 
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "business_results.csv";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    URL.revokeObjectURL(url);
-    status.textContent = "CSV downloaded";
-  } catch (e) {
+  }catch(e){
     console.error(e);
-    status.textContent = "CSV export failed";
+    status.textContent="Error contacting server";
   }
 }
 
-document.getElementById("searchBtn").addEventListener("click", runSearch);
-document.getElementById("downloadBtn").addEventListener("click", downloadCsv);
+async function downloadCsv(){
+  const location=document.getElementById("location").value.trim();
+  const businessType=document.getElementById("businessType").value.trim();
+  const radiusMiles=Number(document.getElementById("radiusMiles").value);
+  const maxResults=Number(document.getElementById("maxResults").value);
 
-const meetingModal = document.getElementById("meetingModal");
+  const res=await fetch("/api/search.csv",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({
+      location,
+      businessType,
+      radiusMiles,
+      maxResults,
+      scrapeEmails:true,
+      useHunter:false
+    })
+  });
 
-document.getElementById("bookMeetingBtn").onclick = () => {
-  meetingModal.classList.add("show");
-};
+  const blob=await res.blob();
+  const url=URL.createObjectURL(blob);
 
-document.getElementById("closeMeetingModal").onclick = () => {
-  meetingModal.classList.remove("show");
-};
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="business_results.csv";
+  a.click();
 
-meetingModal.addEventListener("click", (e) => {
-  if (e.target === meetingModal) {
-    meetingModal.classList.remove("show");
-  }
-});
+  URL.revokeObjectURL(url);
+}
 
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    meetingModal.classList.remove("show");
-  }
-});
+document.getElementById("searchBtn").addEventListener("click",runSearch);
+document.getElementById("downloadBtn").addEventListener("click",downloadCsv);
 </script>
 
-<script src="https://static.hsappstatic.net/MeetingsEmbed/ex/MeetingsEmbedCode.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCDcAQG2iVH6sDyZ6BMyrZh-5CrUeHtD4M&callback=initMap" async defer></script>
 
 </body>
 </html>
