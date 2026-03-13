@@ -1,104 +1,94 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8"/>
+<meta charset="utf-8" />
 <title>VPS Business Finder</title>
 
 <style>
-body{
-  font-family:Arial,sans-serif;
-  max-width:1200px;
-  margin:30px auto;
-  padding:0 10px;
+
+body {
+  font-family: Arial, sans-serif;
+  max-width: 1300px;
+  margin: 30px auto;
+  padding: 0 10px;
 }
 
-label{
+label {
   display:block;
   margin-top:12px;
   font-weight:600;
 }
 
-input{
+input[type="text"], input[type="number"] {
   width:100%;
   padding:10px;
   margin-top:6px;
   box-sizing:border-box;
 }
 
-button{
+button {
   margin-top:14px;
   padding:10px 14px;
   cursor:pointer;
 }
 
-.layout{
+.layout {
   display:grid;
   grid-template-columns:380px 1fr;
   gap:16px;
 }
 
-#map{
+#map {
   width:100%;
   height:460px;
   border:1px solid #ddd;
   border-radius:8px;
 }
 
-table{
+table {
   width:100%;
   border-collapse:collapse;
   margin-top:18px;
 }
 
-th,td{
+th, td {
   border:1px solid #ddd;
   padding:10px;
-  vertical-align:top;
 }
 
-th{
+th {
   background:#f6f6f6;
 }
 
-.muted{
+.muted {
   color:#666;
   font-size:0.9em;
-  margin-top:10px;
+}
+
+.score {
+  font-weight:bold;
+}
+
+.score.high { color:green }
+.score.mid { color:orange }
+.score.low { color:red }
+
+.platform {
+  font-weight:600;
+}
+
+.ordering {
+  color:#0077cc;
+  font-weight:600;
 }
 
 .intakeBtn{
   padding:6px 10px;
   font-size:13px;
-  white-space:nowrap;
 }
 
-.score-badge{
-  display:inline-block;
-  min-width:48px;
-  text-align:center;
-  padding:6px 10px;
-  border-radius:999px;
-  font-weight:700;
-  color:#fff;
-}
-
-.score-high{ background:#15803d; }
-.score-mid{ background:#b45309; }
-.score-low{ background:#b91c1c; }
-
-.score-reason{
-  display:block;
-  margin-top:4px;
-  color:#666;
-  font-size:12px;
-}
-
-@media (max-width: 1000px){
-  .layout{
-    grid-template-columns:1fr;
-  }
-}
 </style>
+
 </head>
 
 <body>
@@ -106,389 +96,291 @@ th{
 <h2>VPS Business Finder</h2>
 
 <div class="layout">
-  <div>
-    <label>ZIP or Location</label>
-    <input id="location" placeholder="55344 or Eden Prairie, MN">
 
-    <label>Business Type</label>
-    <input id="businessType" placeholder="restaurant">
+<div>
 
-    <label>Radius (miles)</label>
-    <input id="radiusMiles" value="10">
+<label>ZIP or Location</label>
+<input id="location" placeholder="55344 or Eden Prairie, MN">
 
-    <label>Max Results</label>
-    <input id="maxResults" value="100">
+<label>Business Type</label>
+<input id="businessType" placeholder="restaurant">
 
-    <button id="searchBtn">Search</button>
-    <button id="downloadBtn">Download CSV</button>
+<label>Radius (miles)</label>
+<input id="radiusMiles" type="number" value="10">
 
-    <div id="status" class="muted"></div>
-  </div>
+<label>Max Results</label>
+<input id="maxResults" type="number" value="300">
 
-  <div>
-    <div id="map"></div>
-    <div class="muted">Click a table row to zoom to the map pin</div>
-  </div>
+<div>
+<button id="searchBtn">Search</button>
+<button id="downloadBtn">Download CSV</button>
+</div>
+
+<div class="muted" id="status"></div>
+
+</div>
+
+<div>
+<div id="map"></div>
+<div class="muted">Click a table row to zoom to map</div>
+</div>
+
 </div>
 
 <div id="results"></div>
 
 <script>
-const apiUrl="/api/search";
 
-let map;
-let markers=[];
-let infoWindow;
+const apiUrl="/api/search"
+
+let map
+let markers=[]
+let infoWindow
 
 function initMap(){
-  map=new google.maps.Map(document.getElementById("map"),{
-    center:{lat:44.9778,lng:-93.2650},
-    zoom:10
-  });
-  infoWindow=new google.maps.InfoWindow();
+
+map=new google.maps.Map(document.getElementById("map"),{
+center:{lat:44.9778,lng:-93.2650},
+zoom:10
+})
+
+infoWindow=new google.maps.InfoWindow()
+
 }
 
 function clearMap(){
-  markers.forEach(m=>m.setMap(null));
-  markers=[];
+
+markers.forEach(m=>m.setMap(null))
+markers=[]
+
 }
 
 function plotResults(results){
-  clearMap();
 
-  const bounds=new google.maps.LatLngBounds();
+clearMap()
 
-  results.forEach((r)=>{
-    if(!r.lat || !r.lng) return;
+const bounds=new google.maps.LatLngBounds()
 
-    const marker=new google.maps.Marker({
-      position:{lat:Number(r.lat),lng:Number(r.lng)},
-      map,
-      title:r.name
-    });
+results.forEach(r=>{
 
-    marker.addListener("click",()=>{
-      infoWindow.setContent(`
-        <b>${escapeHtml(r.name || "")}</b><br>
-        ${escapeHtml(r.phone || "")}<br>
-        ${escapeHtml(r.address || "")}
-      `);
-      infoWindow.open(map,marker);
-    });
+if(!r.lat || !r.lng) return
 
-    markers.push(marker);
-    bounds.extend(marker.position);
-  });
+const marker=new google.maps.Marker({
+position:{lat:Number(r.lat),lng:Number(r.lng)},
+map,
+title:r.name
+})
 
-  if(markers.length){
-    map.fitBounds(bounds);
-  }
+marker.addListener("click",()=>{
+
+infoWindow.setContent(`
+<b>${r.name}</b><br>
+${r.phone || ""}<br>
+${r.address || ""}
+`)
+
+infoWindow.open(map,marker)
+
+})
+
+markers.push(marker)
+bounds.extend(marker.position)
+
+})
+
+if(markers.length){
+map.fitBounds(bounds)
 }
 
-function focusMarker(index){
-  const marker=markers[index];
-  if(!marker) return;
-  map.panTo(marker.getPosition());
-  map.setZoom(15);
-  google.maps.event.trigger(marker,"click");
 }
 
-function escapeHtml(str){
-  return (str || "").replace(/[&<>"']/g,m=>({
-    "&":"&amp;",
-    "<":"&lt;",
-    ">":"&gt;",
-    '"':"&quot;",
-    "'":"&#039;"
-  }[m]));
+function scoreClass(score){
+
+if(score >= 80) return "high"
+if(score >= 60) return "mid"
+return "low"
+
 }
 
 function stars(rating){
-  const value=Number(rating);
-  if(!value) return "";
-  const rounded=Math.round(value);
-  return "⭐".repeat(rounded) + ` ${value}`;
+
+if(!rating) return ""
+
+const rounded=Math.round(rating)
+let html=""
+
+for(let i=0;i<rounded;i++){
+html+="⭐"
 }
 
-function scoreLead(r){
-  let score=50;
-  const reasons=[];
+return html+" "+rating
 
-  const rating=Number(r.rating || 0);
-  const reviews=Number(r.reviewCount || 0);
-  const hasWebsite=!!r.website;
-  const hasEmail=!!r.email;
-  const hasContact=!!r.contactName;
-  const name=(r.name || "").toLowerCase();
-
-  if(hasWebsite){
-    score += 10;
-    reasons.push("website");
-  }else{
-    score -= 15;
-    reasons.push("no website");
-  }
-
-  if(hasEmail){
-    score += 15;
-    reasons.push("email found");
-  }else{
-    score -= 10;
-    reasons.push("no email");
-  }
-
-  if(hasContact){
-    score += 10;
-    reasons.push("contact name");
-  }
-
-  if(reviews >= 200){
-    score += 15;
-    reasons.push("many reviews");
-  }else if(reviews >= 50){
-    score += 8;
-    reasons.push("solid reviews");
-  }else if(reviews < 10){
-    score -= 8;
-    reasons.push("few reviews");
-  }
-
-  if(rating >= 4.5){
-    score += 10;
-    reasons.push("strong rating");
-  }else if(rating >= 4.0){
-    score += 5;
-  }else if(rating > 0 && rating < 3.8){
-    score -= 12;
-    reasons.push("weak rating");
-  }
-
-  if(name.includes("llc") || name.includes("inc") || name.includes("services") || name.includes("group")){
-    score += 4;
-  }
-
-  if(name.includes("mcdonald") || name.includes("subway") || name.includes("starbucks") || name.includes("target") || name.includes("walmart")){
-    score -= 20;
-    reasons.push("likely chain");
-  }
-
-  score=Math.max(1,Math.min(99,score));
-
-  let level="low";
-  if(score >= 75) level="high";
-  else if(score >= 50) level="mid";
-
-  return {
-    score,
-    level,
-    reason: reasons.slice(0,3).join(", ")
-  };
 }
 
-function parseAddressParts(address){
-  if(!address) return { city:"", state:"", zip:"" };
+function intakeUrl(r){
 
-  const parts=address.split(",").map(p=>p.trim());
-  let city="";
-  let state="";
-  let zip="";
+const params=new URLSearchParams()
 
-  if(parts.length >= 2){
-    city=parts[parts.length - 2] || "";
-  }
+params.set("companyName",r.name || "")
+params.set("companyPhone",r.phone || "")
+params.set("companyEmail",r.email || "")
+params.set("website",r.website || "")
+params.set("address",r.address || "")
 
-  if(parts.length >= 1){
-    const lastPart=parts[parts.length - 1] || "";
-    const match=lastPart.match(/^([A-Za-z\s]+)\s+(\d{5}(?:-\d{4})?)$/);
+return "https://quiet-recipe-ef97.jgambiana.workers.dev/?"+params.toString()
 
-    if(match){
-      state=match[1].trim();
-      zip=match[2].trim();
-    }else{
-      state=lastPart.trim();
-    }
-  }
-
-  return { city, state, zip };
-}
-
-function openIntakeForm(r){
-  const url=new URL("https://quiet-recipe-ef97.jgambiana.workers.dev/");
-
-  if(r.name) url.searchParams.set("companyName",r.name);
-
-  if(r.phone){
-    url.searchParams.set("companyPhone",r.phone);
-    url.searchParams.set("contactPhone",r.phone);
-    url.searchParams.set("companyPhoneCode","+1");
-    url.searchParams.set("contactPhoneCode","+1");
-  }
-
-  if(r.email){
-    url.searchParams.set("companyEmail",r.email);
-    url.searchParams.set("contactEmail",r.email);
-  }
-
-  if(r.website) url.searchParams.set("website",r.website);
-
-  if(r.address){
-    url.searchParams.set("address",r.address);
-    const parsed=parseAddressParts(r.address);
-    if(parsed.city) url.searchParams.set("city",parsed.city);
-    if(parsed.state) url.searchParams.set("state",parsed.state);
-    if(parsed.zip) url.searchParams.set("zip",parsed.zip);
-  }
-
-  if(r.contactName){
-    const parts=r.contactName.trim().split(/\s+/);
-    if(parts.length > 0) url.searchParams.set("firstName",parts[0]);
-    if(parts.length > 1) url.searchParams.set("lastName",parts.slice(1).join(" "));
-  }
-
-  if(r.contactTitle) url.searchParams.set("jobTitle",r.contactTitle);
-
-  url.searchParams.set("callDisposition","Connected");
-  url.searchParams.set("notes","Lead opened from VPS Business Finder");
-
-  window.open(url.toString(),"_blank");
 }
 
 async function runSearch(){
-  const location=document.getElementById("location").value.trim();
-  const businessType=document.getElementById("businessType").value.trim();
-  const radiusMiles=Number(document.getElementById("radiusMiles").value);
-  const maxResults=Number(document.getElementById("maxResults").value);
 
-  const status=document.getElementById("status");
-  const resultsDiv=document.getElementById("results");
+const location=document.getElementById("location").value.trim()
+const businessType=document.getElementById("businessType").value.trim()
+const radiusMiles=Number(document.getElementById("radiusMiles").value)
+const maxResults=Number(document.getElementById("maxResults").value)
 
-  status.textContent="Searching...";
-  resultsDiv.innerHTML="";
+const status=document.getElementById("status")
+const resultsDiv=document.getElementById("results")
 
-  try{
-    const res=await fetch(apiUrl,{
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body:JSON.stringify({
-        location,
-        businessType,
-        radiusMiles,
-        maxResults,
-        scrapeEmails:true,
-        useHunter:false
-      })
-    });
+status.textContent="Searching..."
 
-    let data={};
-    try{
-      data=await res.json();
-    }catch(_){
-      data={};
-    }
+try{
 
-    if(!res.ok){
-      status.textContent=data.error || `Search failed (${res.status})`;
-      return;
-    }
+const res=await fetch(apiUrl,{
+method:"POST",
+headers:{ "Content-Type":"application/json" },
+body:JSON.stringify({
+location,
+businessType,
+radiusMiles,
+maxResults,
+scrapeEmails:true,
+useHunter:false
+})
+})
 
-    status.textContent=`Found ${data.count} results`;
-    plotResults(data.results || []);
+const data=await res.json()
 
-    const rows=(data.results || []).map((r,i)=>{
-      const lead=scoreLead(r);
-      const intakePayload=JSON.stringify(r).replace(/'/g,"&#39;");
+if(!res.ok){
 
-      return `
-        <tr data-idx="${i}">
-          <td>${escapeHtml(r.name || "")}</td>
-          <td>
-            <span class="score-badge score-${lead.level}">${lead.score}</span>
-            <span class="score-reason">${escapeHtml(lead.reason)}</span>
-          </td>
-          <td>${escapeHtml(r.contactName || "")}</td>
-          <td>${escapeHtml(r.email || "")}</td>
-          <td>${escapeHtml(r.phone || "")}</td>
-          <td>${escapeHtml(r.address || "")}</td>
-          <td>${stars(r.rating)} <span class="muted">(${escapeHtml(String(r.reviewCount || 0))})</span></td>
-          <td>${r.website ? `<a href="${r.website}" target="_blank" onclick="event.stopPropagation()">Website</a>` : ""}</td>
-          <td>
-            <button class="intakeBtn" type="button" onclick='event.stopPropagation(); openIntakeForm(${intakePayload})'>
-              Open Intake
-            </button>
-          </td>
-        </tr>
-      `;
-    }).join("");
+status.textContent=data.error || "Search failed"
+return
 
-    resultsDiv.innerHTML=`
-      <table>
-        <thead>
-          <tr>
-            <th>Business</th>
-            <th>Lead Score</th>
-            <th>Contact</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Address</th>
-            <th>Reviews</th>
-            <th>Website</th>
-            <th>Intake</th>
-          </tr>
-        </thead>
-        <tbody id="resultsBody">
-          ${rows}
-        </tbody>
-      </table>
-    `;
+}
 
-    const tbody=document.getElementById("resultsBody");
-    if(tbody){
-      tbody.addEventListener("click",(e)=>{
-        const tr=e.target.closest("tr");
-        if(!tr) return;
-        const idx=Number(tr.getAttribute("data-idx"));
-        focusMarker(idx);
-      });
-    }
+status.textContent=`Found ${data.count} results`
 
-  }catch(e){
-    console.error(e);
-    status.textContent="Error contacting server";
-  }
+plotResults(data.results)
+
+const rows=data.results.map((r,i)=>`
+
+<tr data-idx="${i}">
+
+<td>${r.name}</td>
+
+<td class="score ${scoreClass(r.opportunityScore)}">
+${r.opportunityScore}
+</td>
+
+<td>${r.contactName || ""}</td>
+
+<td>${r.email || ""}</td>
+
+<td>${r.phone || ""}</td>
+
+<td>${r.address || ""}</td>
+
+<td>${stars(r.rating)}</td>
+
+<td class="platform">${r.tech?.platform || ""}</td>
+
+<td class="ordering">
+${r.tech?.ordering ? "Yes" : ""}
+</td>
+
+<td>
+<button class="intakeBtn"
+onclick="window.open('${intakeUrl(r)}','_blank')">
+Open Intake
+</button>
+</td>
+
+</tr>
+
+`).join("")
+
+resultsDiv.innerHTML=`
+
+<table>
+
+<thead>
+<tr>
+
+<th>Business</th>
+<th>Score</th>
+<th>Contact</th>
+<th>Email</th>
+<th>Phone</th>
+<th>Address</th>
+<th>Reviews</th>
+<th>Platform</th>
+<th>Ordering</th>
+<th>Intake</th>
+
+</tr>
+</thead>
+
+<tbody>
+${rows}
+</tbody>
+
+</table>
+
+`
+
+}catch(e){
+
+console.error(e)
+status.textContent="Error contacting server"
+
+}
+
 }
 
 async function downloadCsv(){
-  const location=document.getElementById("location").value.trim();
-  const businessType=document.getElementById("businessType").value.trim();
-  const radiusMiles=Number(document.getElementById("radiusMiles").value);
-  const maxResults=Number(document.getElementById("maxResults").value);
 
-  const res=await fetch("/api/search.csv",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({
-      location,
-      businessType,
-      radiusMiles,
-      maxResults,
-      scrapeEmails:true,
-      useHunter:false
-    })
-  });
+const location=document.getElementById("location").value.trim()
+const businessType=document.getElementById("businessType").value.trim()
+const radiusMiles=Number(document.getElementById("radiusMiles").value)
+const maxResults=Number(document.getElementById("maxResults").value)
 
-  const blob=await res.blob();
-  const url=URL.createObjectURL(blob);
+const res=await fetch("/api/search.csv",{
+method:"POST",
+headers:{ "Content-Type":"application/json" },
+body:JSON.stringify({
+location,
+businessType,
+radiusMiles,
+maxResults,
+scrapeEmails:true
+})
+})
 
-  const a=document.createElement("a");
-  a.href=url;
-  a.download="business_results.csv";
-  a.click();
+const blob=await res.blob()
 
-  URL.revokeObjectURL(url);
+const url=URL.createObjectURL(blob)
+
+const a=document.createElement("a")
+a.href=url
+a.download="business_results.csv"
+a.click()
+
+URL.revokeObjectURL(url)
+
 }
 
-document.getElementById("searchBtn").addEventListener("click",runSearch);
-document.getElementById("downloadBtn").addEventListener("click",downloadCsv);
+document.getElementById("searchBtn").addEventListener("click",runSearch)
+document.getElementById("downloadBtn").addEventListener("click",downloadCsv)
+
 </script>
 
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCDcAQG2iVH6sDyZ6BMyrZh-5CrUeHtD4M&callback=initMap" async defer></script>
