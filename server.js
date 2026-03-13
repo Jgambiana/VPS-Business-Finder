@@ -1,4 +1,3 @@
-
 require("dotenv").config({ path: __dirname + "/.env" });
 
 const express = require("express");
@@ -124,9 +123,6 @@ async function placesTextSearchPaged({
 }
 
 function buildGridPoints(centerLat, centerLng, radiusMeters, gridSize) {
-  // gridSize 1 => just center
-  // gridSize 3 => 9 points
-  // gridSize 5 => 25 points
   if (gridSize <= 1) {
     return [{ lat: centerLat, lng: centerLng }];
   }
@@ -158,13 +154,11 @@ async function scanGridPlaces({
   targetResults = 300
 }) {
   let gridSize = 1;
-
   if (targetResults > 60) gridSize = 3;
   if (targetResults > 300) gridSize = 5;
 
   const gridPoints = buildGridPoints(centerLat, centerLng, radiusMeters, gridSize);
 
-  // Smaller per-cell radius reduces overlap and improves coverage.
   const perCellRadius = Math.max(
     1500,
     Math.min(25000, Math.round(radiusMeters / Math.max(gridSize - 1, 1)))
@@ -178,6 +172,7 @@ async function scanGridPlaces({
   });
 
   const allPlaces = [];
+
   for (let i = 0; i < gridPoints.length; i++) {
     const point = gridPoints[i];
     console.log(`Grid search ${i + 1}/${gridPoints.length}`, point);
@@ -196,7 +191,6 @@ async function scanGridPlaces({
       console.error("Grid cell search failed:", i + 1, err.message || err);
     }
 
-    // Small pause between grid cell searches to be polite
     await sleep(250);
   }
 
@@ -288,6 +282,51 @@ async function fetchHtml(url, timeoutMs = 8000) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function detectWebsiteTech(html = "") {
+  const lower = html.toLowerCase();
+
+  const tech = {
+    platform: "",
+    payment: "",
+    ordering: false
+  };
+
+  if (lower.includes("cdn.shopify.com")) tech.platform = "Shopify";
+  else if (lower.includes("woocommerce")) tech.platform = "WooCommerce";
+  else if (lower.includes("squarespace")) tech.platform = "Squarespace";
+  else if (lower.includes("wix.com")) tech.platform = "Wix";
+
+  if (lower.includes("stripe")) tech.payment = "Stripe";
+  else if (lower.includes("squareup")) tech.payment = "Square";
+  else if (lower.includes("toasttab")) tech.payment = "Toast";
+
+  if (
+    lower.includes("order online") ||
+    lower.includes("add to cart") ||
+    lower.includes("checkout") ||
+    lower.includes("online ordering")
+  ) {
+    tech.ordering = true;
+  }
+
+  return tech;
+}
+
+function calculateOpportunityScore(business) {
+  let score = 50;
+
+  if (!business.website) score += 20;
+  if (business.tech?.ordering) score += 15;
+  if (business.tech?.payment === "Stripe") score += 15;
+  if (business.tech?.payment === "Square") score += 15;
+  if (business.reviewCount < 20) score -= 10;
+  if (business.reviewCount > 200) score += 10;
+  if (business.email) score += 10;
+
+  score = Math.max(1, Math.min(100, score));
+  return score;
 }
 
 async function scrapeEmailsFromWebsite(websiteUrl) {
@@ -528,11 +567,8 @@ async function buildResults({
   });
 
   const geo = await geocodeLocation(location);
-
   const radiusMeters = Math.min(Math.round(Number(radiusMiles) * 1609.34), 50000);
   const query = `${businessType} in ${location}`;
-
-  // Safety cap to avoid accidental huge API bills
   const cappedMaxResults = Math.min(Number(maxResults) || 300, 1500);
 
   const places = await scanGridPlaces({
@@ -552,9 +588,15 @@ async function buildResults({
 
       let emails = [];
       let bestEmail = "";
+      let tech = {};
 
       const website = (r && r.website) || "";
       const domain = getDomainFromWebsite(website);
+
+      if (website) {
+        const html = await fetchHtml(website);
+        tech = detectWebsiteTech(html || "");
+      }
 
       if (scrapeEmails && website) {
         try {
@@ -583,16 +625,24 @@ async function buildResults({
       }
 
       const finalEmail = hunterData.hunterEmail || bestEmail || "";
+      const reviewCount = (r && r.user_ratings_total) || 0;
 
       return {
         name: (r && r.name) || p.name || "",
         phone: (r && (r.formatted_phone_number || r.international_phone_number)) || "",
         address: (r && r.formatted_address) || p.formatted_address || "",
         website,
+        tech,
+        opportunityScore: calculateOpportunityScore({
+          website,
+          reviewCount,
+          email: finalEmail,
+          tech
+        }),
         domain,
         googleMapsUrl: (r && r.url) || "",
         rating: (r && r.rating) || "",
-        reviewCount: (r && r.user_ratings_total) || "",
+        reviewCount,
         lat: (p.geometry && p.geometry.location && p.geometry.location.lat) || "",
         lng: (p.geometry && p.geometry.location && p.geometry.location.lng) || "",
         email: finalEmail,
@@ -702,6 +752,7 @@ app.post("/api/search.csv", async (req, res) => {
 
     const headers = [
       { label: "Business Name", key: "name" },
+      { label: "Opportunity Score", key: "opportunityScore" },
       { label: "Phone", key: "phone" },
       { label: "Address", key: "address" },
       { label: "Website", key: "website" },
@@ -715,12 +766,22 @@ app.post("/api/search.csv", async (req, res) => {
       { label: "All Scraped Emails", key: "allEmails" },
       { label: "Rating", key: "rating" },
       { label: "Review Count", key: "reviewCount" },
+      { label: "Website Platform", key: "tech.platform" },
+      { label: "Payment Platform", key: "tech.payment" },
+      { label: "Online Ordering", key: "tech.ordering" },
       { label: "Google Maps URL", key: "googleMapsUrl" },
       { label: "Latitude", key: "lat" },
       { label: "Longitude", key: "lng" },
     ];
 
-    const csv = toCsv(data.results, headers);
+    const flattenedRows = data.results.map((r) => ({
+      ...r,
+      "tech.platform": r.tech?.platform || "",
+      "tech.payment": r.tech?.payment || "",
+      "tech.ordering": r.tech?.ordering ? "Yes" : "No",
+    }));
+
+    const csv = toCsv(flattenedRows, headers);
 
     const safeLocation = String(location).replace(/[^\w-]+/g, "_").slice(0, 40);
     const safeType = String(businessType).replace(/[^\w-]+/g, "_").slice(0, 40);
